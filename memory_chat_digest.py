@@ -7,6 +7,7 @@ import os
 import json
 import requests
 from gist_memory import Gist
+# import girl_firend as girl
 
 api_key = os.getenv("CHATGPT_API_KEY")
 headers = {
@@ -69,9 +70,13 @@ def ask(chat_summary=""):
                              data=json.dumps(data)).json()
     ai_response = response['choices'][0]['message']['content']
     print(f"AI: {ai_response}")  # Siri読み上げ
-    chat_summary = summarize(chat_summary, user_input, ai_response)  # 会話を要約
-    gist.patch(chat_summary)  # 要約を長期記憶へ保存
-    ask(chat_summary)  # 次の質問
+    try:
+        # 会話を要約
+        chat_summary = summarize(chat_summary, user_input, ai_response)
+        # 次の質問
+        ask(chat_summary)
+    finally:  # 最後に要約を長期記憶へ保存
+        gist.patch(chat_summary)
 
 
 ask()
