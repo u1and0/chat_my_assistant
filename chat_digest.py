@@ -1,4 +1,6 @@
-"""ChatGPTに複数回の質問と回答"""
+"""ChatGPTに複数回の質問と回答
+会話を要約して短期的に記憶する
+"""
 import os
 import json
 import requests
@@ -40,8 +42,8 @@ def summarize(chat_summary, user_input, ai_response):
 
 
 def ask(chat_summary=""):
-    # AI聞き取り
-    user_input = input("あなた: ")
+    """AIへ質問して回答を表示"""
+    user_input = input("あなた: ")  # AI聞き取り
     data = {
         "model":
         "gpt-3.5-turbo",
@@ -62,8 +64,7 @@ def ask(chat_summary=""):
                              headers=headers,
                              data=json.dumps(data)).json()
     ai_response = response['choices'][0]['message']['content']
-    # Siri読み上げ
-    print(f"AI: {ai_response}")
+    print(f"AI: {ai_response}")  # Siri読み上げ
     chat_summary = summarize(chat_summary, user_input, ai_response)
     ask(chat_summary)
 

@@ -1,4 +1,8 @@
-"""ChatGPTに複数回の質問と回答"""
+"""ChatGPTに複数回の質問と回答
+会話を要約して短期的に記憶する
+過去の会話を長期記憶としてのgistから取得し、
+要約した会話履歴を長期記憶としてgistへ保存する
+"""
 import os
 import json
 import requests
@@ -45,8 +49,7 @@ def ask(chat_summary=""):
     # 会話履歴がなければ長期記憶から取得
     if not chat_summary:
         chat_summary = gist.get()
-    # AI聞き取り
-    user_input = input("あなた: ")
+    user_input = input("あなた: ")  # AI聞き取り
     data = {
         "model":
         "gpt-3.5-turbo",
@@ -65,14 +68,10 @@ def ask(chat_summary=""):
                              headers=headers,
                              data=json.dumps(data)).json()
     ai_response = response['choices'][0]['message']['content']
-    # Siri読み上げ
-    print(f"AI: {ai_response}")
-    # 会話を要約
-    chat_summary = summarize(chat_summary, user_input, ai_response)
-    # 要約を長期記憶へ保存
-    gist.patch(chat_summary)
-    # 次の質問
-    ask(chat_summary)
+    print(f"AI: {ai_response}")  # Siri読み上げ
+    chat_summary = summarize(chat_summary, user_input, ai_response)  # 会話を要約
+    gist.patch(chat_summary)  # 要約を長期記憶へ保存
+    ask(chat_summary)  # 次の質問
 
 
 ask()

@@ -16,8 +16,7 @@ system_role = """
 
 
 def ask(ai_response=""):
-    # AI聞き取り
-    user_input = input("あなた: ")
+    user_input = input("あなた: ")  # AI聞き取り
     data = {
         "model":
         "gpt-3.5-turbo",
@@ -41,8 +40,7 @@ def ask(ai_response=""):
                              headers=headers,
                              data=json.dumps(data)).json()
     ai_response = response['choices'][0]['message']['content']
-    # Siri読み上げ
-    print(f"AI: {ai_response}")
+    print(f"AI: {ai_response}")  # Siri読み上げ
     ask(ai_response)
 
 
