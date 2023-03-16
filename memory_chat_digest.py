@@ -6,6 +6,7 @@
 import os
 import json
 import requests
+from time import sleep
 from gist_memory import Gist
 
 api_key = os.getenv("CHATGPT_API_KEY")
@@ -80,7 +81,9 @@ class Assistant:
                                  headers=headers,
                                  data=json.dumps(data)).json()
         ai_response = response['choices'][0]['message']['content']
-        print(f"AI: {ai_response}")  # Siri読み上げ
+        for text in f"AI: {ai_response}\n":  # 一文字ずつ出力
+            print(text, end="", flush=True)
+            sleep(0.1)
         # 会話を要約
         self.chat_summary = self.summarize(user_input, ai_response)
         # 最後に要約を長期記憶へ保存
