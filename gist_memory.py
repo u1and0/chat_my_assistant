@@ -17,7 +17,7 @@ import json
 class Gist:
     """gist API handler"""
     _root = "https://api.github.com/gists/"
-    _id = os.getenv("CHATGPT_MEMORY")
+    _id = os.getenv("GIST_ID")
     url = _root + _id
     __token = os.getenv("GITHUB_TOKEN")
 
