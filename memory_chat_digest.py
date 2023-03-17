@@ -22,7 +22,7 @@ headers = {
 
 def print_one_by_one(text):
     """一文字ずつ出力"""
-    for char in f"AI: {text}\n":
+    for char in f"{text}\n":
         try:
             print(char, end="", flush=True)
             sleep(0.1)
@@ -51,6 +51,7 @@ async def async_input() -> str:
 
 class Assistant:
     filename = "chatgpt-assistant.txt"
+    name = "AI"
 
     def __init__(self):
         # 初期化時に長期記憶から取得
@@ -134,7 +135,7 @@ class Assistant:
         }
         # 回答を考えてもらう
         ai_response = self.post(data)
-        print_one_by_one(ai_response)
+        print_one_by_one(f"{self.name}: {ai_response}")
         # 会話を要約
         self.chat_summary = self.summarize(user_input, ai_response)
         # 最後に要約を長期記憶へ保存
@@ -145,6 +146,7 @@ class Assistant:
 
 class Girl(Assistant):
     filename = "chatgpt-chan.txt"
+    name = "クリステル"
 
     def __init__(self):
         self.gist = Gist(Girl.filename)
