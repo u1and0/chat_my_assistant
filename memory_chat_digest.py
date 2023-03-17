@@ -4,6 +4,7 @@
 要約した会話履歴を長期記憶としてgistへ保存する
 """
 import os
+import sys
 import json
 import requests
 from time import sleep
@@ -58,6 +59,8 @@ class Assistant:
 
     def ask(self):
         user_input = input("あなた: ")  # AI聞き取り
+        if user_input == "q" or user_input == "exit":
+            sys.exit(0)
         data = {
             "model":
             "gpt-3.5-turbo",
@@ -82,8 +85,11 @@ class Assistant:
                                  data=json.dumps(data)).json()
         ai_response = response['choices'][0]['message']['content']
         for text in f"AI: {ai_response}\n":  # 一文字ずつ出力
-            print(text, end="", flush=True)
-            sleep(0.1)
+            try:
+                print(text, end="", flush=True)
+                sleep(0.1)
+            except KeyboardInterrupt:
+                break
         # 会話を要約
         self.chat_summary = self.summarize(user_input, ai_response)
         # 最後に要約を長期記憶へ保存
