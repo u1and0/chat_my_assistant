@@ -8,6 +8,8 @@ import sys
 import json
 import requests
 from time import sleep
+import asyncio
+import random
 from gist_memory import Gist
 
 api_key = os.getenv("CHATGPT_API_KEY")
@@ -15,6 +17,25 @@ headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {api_key}"
 }
+
+
+async def wait_for_input(timeout: float) -> str:
+    """時間経過でタイムアウトエラーを発生させる"""
+    try:
+        input_task = asyncio.create_task(async_input())
+        done, pending = await asyncio.wait({input_task}, timeout=timeout)
+        if input_task in done:
+            return input_task.result()
+        else:
+            raise asyncio.TimeoutError("Timeout")
+    except asyncio.CancelledError:
+        input_task.cancel()
+        raise
+
+
+async def async_input() -> str:
+    return await asyncio.get_running_loop().run_in_executor(
+        None, input, "あなた: ")
 
 
 class Assistant:
@@ -57,8 +78,15 @@ class Assistant:
         ai_response = response['choices'][0]['message']['content']
         return ai_response
 
-    def ask(self):
-        user_input = input("あなた: ")  # AI聞き取り
+    async def ask(self):
+        # AI聞き取り
+        try:
+            user_input = await wait_for_input(5.0)
+        except asyncio.TimeoutError:
+            print("Timeout")
+            user_input = "続けて"
+        except KeyboardInterrupt:
+            sys.exit(0)
         if user_input == "q" or user_input == "exit":
             sys.exit(0)
         data = {
@@ -95,7 +123,7 @@ class Assistant:
         # 最後に要約を長期記憶へ保存
         self.gist.patch(self.chat_summary)
         # 次の質問
-        self.ask()
+        await self.ask()
 
 
 class Girl(Assistant):
@@ -123,4 +151,4 @@ class Girl(Assistant):
 if __name__ == "__main__":
     # ai = Assistant()
     ai = Girl()
-    ai.ask()
+    asyncio.run(ai.ask())
