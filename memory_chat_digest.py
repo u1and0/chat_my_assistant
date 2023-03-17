@@ -81,13 +81,23 @@ class Assistant:
     async def ask(self):
         # AI聞き取り
         try:
-            user_input = await wait_for_input(5.0)
+            # 5分話さなければ下記の指示をしてAIが話し始める
+            user_input = await wait_for_input(300)
         except asyncio.TimeoutError:
-            print("Timeout")
-            user_input = "続けて"
+            if random.random() < 1 / 4:
+                print("\n")
+                user_input = "続けて"
+            elif random.random() < 2 / 4:
+                print("\n")
+                user_input = "他の話題は？"
+            elif random.random() < 3 / 4:
+                print("\n")
+                user_input = "これまでの話題から一つピックアップして"
+            else:
+                await self.ask()
         except KeyboardInterrupt:
-            sys.exit(0)
-        if user_input == "q" or user_input == "exit":
+            sys.exit(1)
+        if user_input.strip() == "q" or user_input.strip() == "exit":
             sys.exit(0)
         data = {
             "model":
