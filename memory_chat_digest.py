@@ -6,17 +6,28 @@
 import os
 import sys
 import json
-import requests
 from time import sleep
 import asyncio
 import random
+import requests
 from gist_memory import Gist
 
 api_key = os.getenv("CHATGPT_API_KEY")
+url = "https://api.openai.com/v1/chat/completions"
 headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {api_key}"
 }
+
+
+def print_one_by_one(text):
+    """一文字ずつ出力"""
+    for char in f"AI: {text}\n":
+        try:
+            print(char, end="", flush=True)
+            sleep(0.1)
+        except KeyboardInterrupt:
+            return
 
 
 async def wait_for_input(timeout: float) -> str:
@@ -49,6 +60,13 @@ class Assistant:
         self.chat_summary = self.gist.get()
         self.system_role = "さっきの話の内容を聞かれたら、話をまとめてください。"
 
+    def post(self, data: dict) -> str:
+        """POST question to ChatGPT API"""
+        response = requests.post(url, headers=headers,
+                                 data=json.dumps(data)).json()
+        ai_response = response['choices'][0]['message']['content']
+        return ai_response
+
     def summarize(self, user_input, ai_response):
         """会話の要約
         * これまでの会話履歴
@@ -72,14 +90,11 @@ class Assistant:
             "max_tokens": 2000
         }
         # AIに要約させる
-        response = requests.post("https://api.openai.com/v1/chat/completions",
-                                 headers=headers,
-                                 data=json.dumps(data)).json()
-        ai_response = response['choices'][0]['message']['content']
+        ai_response = self.post(data)
         return ai_response
 
     async def ask(self):
-        # AI聞き取り
+        """AIへの質問"""
         try:
             # 5分話さなければ下記の指示をしてAIが話し始める
             user_input = await wait_for_input(300)
@@ -117,17 +132,9 @@ class Assistant:
                 "content": user_input
             }]
         }
-        # POSTリクエスト
-        response = requests.post("https://api.openai.com/v1/chat/completions",
-                                 headers=headers,
-                                 data=json.dumps(data)).json()
-        ai_response = response['choices'][0]['message']['content']
-        for text in f"AI: {ai_response}\n":  # 一文字ずつ出力
-            try:
-                print(text, end="", flush=True)
-                sleep(0.1)
-            except KeyboardInterrupt:
-                break
+        # 回答を考えてもらう
+        ai_response = self.post(data)
+        print_one_by_one(ai_response)
         # 会話を要約
         self.chat_summary = self.summarize(user_input, ai_response)
         # 最後に要約を長期記憶へ保存
