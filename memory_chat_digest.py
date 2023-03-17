@@ -146,21 +146,16 @@ class Assistant:
         }
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
-        print("ポストします。")
         ai_response = await self.post(data)
         # 会話を要約
         # create_taskして完了を待たずにai_responseをprintする
         summary_task = asyncio.create_task(
             self.summarize(user_input, ai_response))
-        print("要約タスクをyieldしました")
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         print_one_by_one(f"{self.name}: {ai_response}")
-        print("要約文を待ちます。")
         # 要約を待つ
         self.chat_summary = await summary_task
-        print("要約文が来ました")
         # 最後に要約を長期記憶へ保存
-        print("gistへ要約を保存します。")
         self.gist.patch(self.chat_summary)
         # 次の質問
         await ai.ask()
