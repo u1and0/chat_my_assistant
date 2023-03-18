@@ -9,10 +9,9 @@ import sys
 import json
 import random
 from time import sleep
+from itertools import cycle
 import asyncio
-import requests
 import aiohttp
-from halo import Halo
 from gist_memory import Gist
 
 api_key = os.getenv("CHATGPT_API_KEY")
@@ -21,6 +20,16 @@ headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {api_key}"
 }
+# アシスタントが書き込む間隔(秒)
+INTERVAL = 0.02
+
+
+async def spinner():
+    """非同期処理待ちスピナー"""
+    dots = cycle([".", "..", "..."])
+    while True:
+        print(f"{next(dots):<3}", end="\r")
+        await asyncio.sleep(0.1)
 
 
 def get_content(resp_json: dict) -> str:
@@ -45,7 +54,7 @@ def print_one_by_one(text):
     for char in f"{text}\n":
         try:
             print(char, end="", flush=True)
-            sleep(0.1)
+            sleep(INTERVAL)
         except KeyboardInterrupt:
             return
 
@@ -169,12 +178,14 @@ class Assistant:
         }
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
-        with Halo(spinner="dots") as spinner:
-            spinner.start()
-            try:
-                ai_response = await self.post(data)
-            except KeyboardInterrupt:
-                await ai.ask()
+        spinner_task = asyncio.create_task(spinner())
+        try:
+            ai_response = await self.post(data)
+        except KeyboardInterrupt:
+            print()
+            await ai.ask()
+        finally:
+            spinner_task.cancel()
         # 会話を要約
         # create_taskして完了を待たずにai_responseをprintする
         asyncio.create_task(self.summarize(user_input, ai_response))
@@ -209,6 +220,6 @@ class Girl(Assistant):
 
 if __name__ == "__main__":
     # ai = Assistant()
-    print("空行で入力確定, Ctrl-Cで入力キャンセル")
+    print("空行で入力確定, qまたはexitで会話終了")
     ai = Girl()
     asyncio.run(ai.ask())
