@@ -12,6 +12,7 @@ from time import sleep
 import asyncio
 import requests
 import aiohttp
+from halo import Halo
 from gist_memory import Gist
 
 api_key = os.getenv("CHATGPT_API_KEY")
@@ -20,6 +21,11 @@ headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {api_key}"
 }
+
+
+def get_content(resp_json: dict):
+    """JSONからAIの回答を取得"""
+    return resp_json['choices'][0]['message']['content']
 
 
 def multi_input() -> str:
@@ -44,17 +50,31 @@ def print_one_by_one(text):
             return
 
 
-async def wait_for_input(timeout: float) -> str:
+async def wait_for_input(text: str, timeout: float) -> str:
     """時間経過でタイムアウトエラーを発生させる"""
+    silent_input = [
+        "",
+        "続けて",
+        "他の話題は？",
+        "これまでの話題から一つピックアップして",
+    ]
     try:
+        # 5分入力しなければ下記のいずれかの指示をしてAIが話し始める
+        # text = await wait_for_input(300)
         input_task = asyncio.create_task(async_input())
-        done, pending = await asyncio.wait({input_task}, timeout=timeout)
+        done, _ = await asyncio.wait({input_task}, timeout=timeout)
         if input_task in done:
             return input_task.result()
         raise asyncio.TimeoutError("Timeout")
     except asyncio.CancelledError:
         input_task.cancel()
         raise
+    except asyncio.TimeoutError:
+        # 5分黙っていたらランダムに一つ質問
+        text = random.choice(silent_input)
+    except KeyboardInterrupt:
+        sys.exit(1)
+    return text
 
 
 async def async_input() -> str:
@@ -74,15 +94,15 @@ class Assistant:
         self.chat_summary = self.gist.get()
         self.system_role = "さっきの話の内容を聞かれたら、話をまとめてください。"
 
+    @Halo(text="loading...", spinner="dots")
     async def post(self, data: dict) -> str:
         """POST question to ChatGPT API"""
         async with aiohttp.ClientSession() as session:
             async with session.post(url,
                                     headers=headers,
                                     data=json.dumps(data)) as response:
-                # response = requests.post(url, headers=headers, data=json.dumps(data))
                 ai_response = await response.json()
-        content = ai_response['choices'][0]['message']['content']
+        content = get_content(ai_response)
         return content
 
     async def summarize(self, user_input: str, ai_response: str):
@@ -113,30 +133,19 @@ class Assistant:
                                     headers=headers,
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
-        content = ai_response['choices'][0]['message']['content']
+        content = get_content(ai_response)
         return content
 
     async def ask(self, user_input: str = ""):
         """AIへの質問"""
-        silent_input = [
-            "",
-            "続けて",
-            "他の話題は？",
-            "これまでの話題から一つピックアップして",
-        ]
         if not user_input:
-            try:
-                # 5分入力しなければ下記のいずれかの指示をしてAIが話し始める
-                user_input = await wait_for_input(300)
-            except asyncio.TimeoutError:
-                user_input = random.choice(silent_input)
-            except KeyboardInterrupt:
-                sys.exit(1)
-        if not user_input:  # 1/4の確率で再度質問待ち
+            user_input = await wait_for_input(user_input, timeout=300)
+        # 入力がなければ、再度質問待ち
+        if not user_input:
             await self.ask()
-        if user_input.strip() == "q" or user_input.strip() == "exit":
+        user_input = user_input.strip().replace("/n", "")
+        if user_input in ("q", "exit"):
             sys.exit(0)
-        print(user_input)
         # ChatGPTへのPOSTリクエスト
         data = {
             "model":
@@ -158,13 +167,18 @@ class Assistant:
         }
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
-        ai_response = await self.post(data)
+        with Halo(spinner="dots") as spinner:
+            spinner.start()
+            try:
+                ai_response = await self.post(data)
+            except KeyboardInterrupt:
+                await ai.ask()
         # 会話を要約
         # create_taskして完了を待たずにai_responseをprintする
         summary_task = asyncio.create_task(
             self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
-        print_one_by_one(f"{self.name}: {ai_response}")
+        print_one_by_one(f"{self.name}: {ai_response}\n")
         # 要約を待つ
         self.chat_summary = await summary_task
         # 最後に要約を長期記憶へ保存
