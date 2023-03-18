@@ -230,9 +230,8 @@ def AI_constractor() -> list[AI]:
 
 if __name__ == "__main__":
     print("空行で入力確定, qまたはexitで会話終了")
-    ais = AI_constractor()
-    print(ais)
-    ai = ais[1]
+    ais: list[AI] = AI_constractor()
+    ai = [a for a in ais if a.name == "クリステル"][0]
     ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
     asyncio.run(ai.ask())
