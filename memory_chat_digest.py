@@ -14,11 +14,14 @@ import asyncio
 import aiohttp
 from gist_memory import Gist
 
-api_key = os.getenv("CHATGPT_API_KEY")
-url = "https://api.openai.com/v1/chat/completions"
-headers = {
+# ChatGPT API Key
+API_KEY = os.getenv("CHATGPT_API_KEY")
+# ChatGPT API Endpoint
+ENDPOINT = "https://api.openai.com/v1/chat/completions"
+# ChatGPT API header
+HEADERS = {
     "Content-Type": "application/json",
-    "Authorization": f"Bearer {api_key}"
+    "Authorization": f"Bearer {API_KEY}"
 }
 # アシスタントが書き込む間隔(秒)
 INTERVAL = 0.02
@@ -106,8 +109,8 @@ class Assistant:
     async def post(self, data: dict) -> str:
         """POST question to ChatGPT API"""
         async with aiohttp.ClientSession() as session:
-            async with session.post(url,
-                                    headers=headers,
+            async with session.post(ENDPOINT,
+                                    headers=HEADERS,
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
         content = get_content(ai_response)
@@ -137,8 +140,8 @@ class Assistant:
                 }],
                 "max_tokens": 2000
             }
-            async with session.post(url,
-                                    headers=headers,
+            async with session.post(ENDPOINT,
+                                    headers=HEADERS,
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
         content = get_content(ai_response)
