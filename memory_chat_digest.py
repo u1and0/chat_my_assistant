@@ -170,8 +170,8 @@ class AI:
         self.gist.patch(content)
         return content
 
-    async def ask(self, user_input: str = ""):
-        """AIへの質問"""
+    async def _generate_json_payload(self, user_input: str) -> dict:
+        """user_inputを受取り、POSTするJSONペイロードを作成"""
         if not user_input:
             user_input = await wait_for_input(user_input, timeout=TIMEOUT)
         # 入力がなければ、再度質問待ち
@@ -180,7 +180,7 @@ class AI:
         user_input = user_input.strip().replace("/n", "")
         if user_input in ("q", "exit"):
             sys.exit(0)
-        # ChatGPTへのPOSTリクエスト
+        # ChatGPTへのPOSTリクエスト用JSON
         messages = [{
             "role": "system",
             "content": self.system_role
@@ -191,13 +191,17 @@ class AI:
             "role": "user",
             "content": user_input
         }]
-
-        data = {
+        payload = {
             "model": MODEL,
             "temperature": self.temperature,
             "max_tokens": self.max_tokens,
             "messages": messages
         }
+        return payload
+
+    async def ask(self, user_input: str = ""):
+        """AIへの質問"""
+        data = await self._generate_json_payload(user_input)
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
         spinner_task = asyncio.create_task(spinner())
