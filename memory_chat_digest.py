@@ -33,6 +33,10 @@ TIMEOUT = 300
 CONFIG_FILE = "./character.yml"
 # 質問待受で表示されるプロンプト
 PROMPT = "あなた: "
+# 要約文の最大トークン数
+SUMMARY_TOKENS = 2000
+# OpenAI model
+MODEL = "gpt-3.5-turbo"
 
 
 async def spinner():
@@ -149,12 +153,12 @@ class AI:
         """
         async with aiohttp.ClientSession() as session:
             data = {
-                "model": "gpt-3.5-turbo",
+                "model": MODEL,
                 "messages": [{
                     "role": "user",
                     "content": content
                 }],
-                "max_tokens": 2000
+                "max_tokens": SUMMARY_TOKENS
             }
             async with session.post(ENDPOINT,
                                     headers=HEADERS,
@@ -177,23 +181,22 @@ class AI:
         if user_input in ("q", "exit"):
             sys.exit(0)
         # ChatGPTへのPOSTリクエスト
+        messages = [{
+            "role": "system",
+            "content": self.system_role
+        }, {
+            "role": "assistant",
+            "content": self.chat_summary
+        }, {
+            "role": "user",
+            "content": user_input
+        }]
+
         data = {
-            "model":
-            "gpt-3.5-turbo",
-            "temperature":
-            self.temperature,
-            "max_tokens":
-            self.max_tokens,
-            "messages": [{
-                "role": "system",
-                "content": self.system_role,
-            }, {
-                "role": "assistant",
-                "content": self.chat_summary
-            }, {
-                "role": "user",
-                "content": user_input
-            }]
+            "model": MODEL,
+            "temperature": self.temperature,
+            "max_tokens": self.max_tokens,
+            "messages": messages
         }
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
