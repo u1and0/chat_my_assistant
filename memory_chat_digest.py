@@ -133,6 +133,10 @@ class Assistant:
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
         content = get_content(ai_response)
+        # 要約を待つ
+        self.chat_summary = content
+        # 最後に要約を長期記憶へ保存
+        self.gist.patch(content)
         return content
 
     async def ask(self, user_input: str = ""):
@@ -174,14 +178,9 @@ class Assistant:
                 await ai.ask()
         # 会話を要約
         # create_taskして完了を待たずにai_responseをprintする
-        summary_task = asyncio.create_task(
-            self.summarize(user_input, ai_response))
+        asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         print_one_by_one(f"{self.name}: {ai_response}\n")
-        # 要約を待つ
-        self.chat_summary = await summary_task
-        # 最後に要約を長期記憶へ保存
-        self.gist.patch(self.chat_summary)
         # 次の質問
         await ai.ask()
 
