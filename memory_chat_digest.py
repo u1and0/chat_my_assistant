@@ -23,7 +23,7 @@ headers = {
 }
 
 
-def get_content(resp_json: dict):
+def get_content(resp_json: dict) -> str:
     """JSONからAIの回答を取得"""
     return resp_json['choices'][0]['message']['content']
 
@@ -133,7 +133,6 @@ class Assistant:
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
         content = get_content(ai_response)
-        # 要約を待つ
         self.chat_summary = content
         # 最後に要約を長期記憶へ保存
         self.gist.patch(content)
