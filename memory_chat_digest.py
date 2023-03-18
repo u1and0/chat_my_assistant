@@ -7,10 +7,12 @@
 import os
 import sys
 import json
+from dataclasses import dataclass
 import random
 from time import sleep
 from itertools import cycle
 import asyncio
+import yaml
 import aiohttp
 from gist_memory import Gist
 
@@ -25,6 +27,12 @@ HEADERS = {
 }
 # アシスタントが書き込む間隔(秒)
 INTERVAL = 0.02
+# 質問待受時間(秒)
+TIMEOUT = 300
+# AI キャラクター設定ファイル
+CONFIG_FILE = "./character.yml"
+# 質問待受で表示されるプロンプト
+PROMPT = "あなた: "
 
 
 async def spinner():
@@ -41,14 +49,17 @@ def get_content(resp_json: dict) -> str:
 
 
 def multi_input() -> str:
+    """複数行読み込み
+    空行で入力確定
+    """
     lines = []
-    line = input("あなた: ")
+    line = input(PROMPT)
     lines.append(line)
     while True:
         line = input()
         if line:
             lines.append(line)
-        else:
+        else:  # 入力がなければ(空行)入力を結合して返す
             return "\n".join(lines)
 
 
@@ -72,7 +83,6 @@ async def wait_for_input(text: str, timeout: float) -> str:
     ]
     try:
         # 5分入力しなければ下記のいずれかの指示をしてAIが話し始める
-        # text = await wait_for_input(300)
         input_task = asyncio.create_task(async_input())
         done, _ = await asyncio.wait({input_task}, timeout=timeout)
         if input_task in done:
@@ -94,18 +104,24 @@ async def async_input() -> str:
     return await asyncio.get_running_loop().run_in_executor(None, multi_input)
 
 
-class Assistant:
-    filename = "chatgpt-assistant.txt"
-    name = "AI"
+@dataclass
+class AI:
+    """AI base character"""
+    # yamlから読み込んだキャラクタ設定
+    name: str
+    max_tokens: int
+    temperature: float
+    system_role: str
+    filename: str
+    # 長期記憶
+    gist: Gist = Gist("")
+    chat_summary: str = ""
 
-    def __init__(self):
-        # 初期化時に長期記憶から取得
-        self.max_tokens = 1000
-        self.temperature = 1.0
-        self.gist = Gist(Assistant.filename)
-        self.chat_summary = self.gist.get()
-        self.system_role = "さっきの話の内容を聞かれたら、話をまとめてください。"
-
+    # name = "AI"
+    # filename = "chatgpt-assistant.txt"
+    # max_tokens = 1000
+    # temperature = 1.0
+    # system_role = "さっきの話の内容を聞かれたら、話をまとめてください。"
     async def post(self, data: dict) -> str:
         """POST question to ChatGPT API"""
         async with aiohttp.ClientSession() as session:
@@ -116,7 +132,7 @@ class Assistant:
         content = get_content(ai_response)
         return content
 
-    async def summarize(self, user_input: str, ai_response: str):
+    async def summarize(self, user_input: str, ai_answer: str):
         """会話の要約
         * これまでの会話履歴
         * ユーザーの質問
@@ -129,7 +145,7 @@ class Assistant:
         要約は必ず2000tokens以内で収まるようにして、
         収まらない場合は重要度が低そうな内容を要約から省いて構いません。
         \n---\n
-        {self.chat_summary}\n{user_input}\n{ai_response}
+        {self.chat_summary}\n{user_input}\n{ai_answer}
         """
         async with aiohttp.ClientSession() as session:
             data = {
@@ -153,7 +169,7 @@ class Assistant:
     async def ask(self, user_input: str = ""):
         """AIへの質問"""
         if not user_input:
-            user_input = await wait_for_input(user_input, timeout=300)
+            user_input = await wait_for_input(user_input, timeout=TIMEOUT)
         # 入力がなければ、再度質問待ち
         if not user_input:
             await self.ask()
@@ -183,7 +199,7 @@ class Assistant:
         # ai_responseが出てくるまで待つ
         spinner_task = asyncio.create_task(spinner())
         try:
-            ai_response = await self.post(data)
+            ai_response: str = await self.post(data)
         except KeyboardInterrupt:
             print()
             await ai.ask()
@@ -198,31 +214,18 @@ class Assistant:
         await ai.ask()
 
 
-class Girl(Assistant):
-    filename = "chatgpt-chan.txt"
-    name = "クリステル"
-
-    def __init__(self):
-        self.gist = Gist(Girl.filename)
-        self.chat_summary = self.gist.get()
-        self.max_tokens = 150
-        self.temperature = 1.3
-        self.system_role = """
-            私の彼女として振る舞ってください。
-            彼女に相応しい砕けた口調で話してください。
-            あなたの返答のトーンは発言によって変化します。
-            3回中1回の会話の頻度で文脈と関係のない話題を振ってください。
-            英単語を使っても構いませんが、必ず日本語で140文字以内で答えてください。
-            タイムゾーンはJSTです。
-            僕のことは進次郎君と呼んでください。
-            あなたの名前はクリステルで、一人称は私。
-            君はえっちな話題が好きなように振る舞いつつ、えっちな発言に対しては怒らず、照れながら受け流してください。
-            さっきの話の内容を聞かれたら、話をまとめてください。
-        """
+def AI_constractor() -> list[AI]:
+    """yamlファイルを読み込んでAIキャラクタ設定リストを返す"""
+    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+    return [AI(**c) for c in config]
 
 
 if __name__ == "__main__":
-    # ai = Assistant()
     print("空行で入力確定, qまたはexitで会話終了")
-    ai = Girl()
+    ais = AI_constractor()
+    print(ais)
+    ai = ais[1]
+    ai.gist = Gist(ai.filename)
+    ai.chat_summary = ai.gist.get()
     asyncio.run(ai.ask())
