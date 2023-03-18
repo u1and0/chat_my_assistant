@@ -94,7 +94,6 @@ class Assistant:
         self.chat_summary = self.gist.get()
         self.system_role = "さっきの話の内容を聞かれたら、話をまとめてください。"
 
-    @Halo(text="loading...", spinner="dots")
     async def post(self, data: dict) -> str:
         """POST question to ChatGPT API"""
         async with aiohttp.ClientSession() as session:
