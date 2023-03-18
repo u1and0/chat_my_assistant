@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """chatgptに複数回の質問と回答
 会話を要約して短期的に記憶する
 過去の会話を長期記憶としてのgistから取得し、
@@ -6,11 +7,11 @@
 import os
 import sys
 import json
+import random
 from time import sleep
 import asyncio
 import requests
 import aiohttp
-import random
 from gist_memory import Gist
 
 api_key = os.getenv("CHATGPT_API_KEY")
@@ -19,6 +20,18 @@ headers = {
     "Content-Type": "application/json",
     "Authorization": f"Bearer {api_key}"
 }
+
+
+def multi_input() -> str:
+    lines = []
+    line = input("あなた: ")
+    lines.append(line)
+    while True:
+        line = input()
+        if line:
+            lines.append(line)
+        else:
+            return "\n".join(lines)
 
 
 def print_one_by_one(text):
@@ -46,8 +59,7 @@ async def wait_for_input(timeout: float) -> str:
 
 async def async_input() -> str:
     """ユーザーinputを非同期に待つ"""
-    return await asyncio.get_running_loop().run_in_executor(
-        None, input, "あなた: ")
+    return await asyncio.get_running_loop().run_in_executor(None, multi_input)
 
 
 class Assistant:
@@ -104,27 +116,27 @@ class Assistant:
         content = ai_response['choices'][0]['message']['content']
         return content
 
-    async def ask(self):
+    async def ask(self, user_input: str = ""):
         """AIへの質問"""
-        try:
-            # 5分入力しなければ下記の指示をしてAIが話し始める
-            user_input = await wait_for_input(300)
-        except asyncio.TimeoutError:
-            if random.random() < 1 / 4:
-                print("\n")
-                user_input = "続けて"
-            elif random.random() < 2 / 4:
-                print("\n")
-                user_input = "他の話題は？"
-            elif random.random() < 3 / 4:
-                print("\n")
-                user_input = "これまでの話題から一つピックアップして"
-            else:
-                await self.ask()
-        except KeyboardInterrupt:
-            sys.exit(1)
+        silent_input = [
+            "",
+            "続けて",
+            "他の話題は？",
+            "これまでの話題から一つピックアップして",
+        ]
+        if not user_input:
+            try:
+                # 5分入力しなければ下記のいずれかの指示をしてAIが話し始める
+                user_input = await wait_for_input(300)
+            except asyncio.TimeoutError:
+                user_input = random.choice(silent_input)
+            except KeyboardInterrupt:
+                sys.exit(1)
+        if not user_input:  # 1/4の確率で再度質問待ち
+            await self.ask()
         if user_input.strip() == "q" or user_input.strip() == "exit":
             sys.exit(0)
+        print(user_input)
         # ChatGPTへのPOSTリクエスト
         data = {
             "model":
@@ -186,5 +198,6 @@ class Girl(Assistant):
 
 if __name__ == "__main__":
     # ai = Assistant()
+    print("空行で入力確定, Ctrl-Cで入力キャンセル")
     ai = Girl()
     asyncio.run(ai.ask())
