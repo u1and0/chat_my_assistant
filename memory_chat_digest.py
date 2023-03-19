@@ -10,6 +10,7 @@ import json
 from dataclasses import dataclass
 import random
 from time import sleep
+import argparse
 from itertools import cycle
 import asyncio
 import yaml
@@ -229,9 +230,25 @@ def AI_constractor() -> list[AI]:
 
 
 if __name__ == "__main__":
-    print("空行で入力確定, qまたはexitで会話終了")
+    # Parse args
+    parser = argparse.ArgumentParser(description="ChatGPT client")
+    parser.add_argument("--character",
+                        "-c",
+                        help="AIキャラクタ指定(default=クリステル)",
+                        default="ChatGPT")
+    parser.add_argument("--voice", "-v", help="AI音声(default=ずんだもん)")
+    args = parser.parse_args()
+    lines = []
+    for line in sys.stdin:
+        lines.append(line)
+    question = "\n".join(lines)
+    print(question)
+    # Load AI characters
     ais: list[AI] = AI_constractor()
-    ai = [a for a in ais if a.name == "クリステル"][0]
+    ai = [a for a in ais if a.name == args.character][-1]
+    # Load chat history
     ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
-    asyncio.run(ai.ask())
+    # Start chat
+    print("空行で入力確定, qまたはexitで会話終了")
+    asyncio.run(ai.ask(question))

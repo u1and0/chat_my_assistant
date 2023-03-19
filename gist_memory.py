@@ -10,8 +10,8 @@ content = gist.patch("明日も晴れ")
 print(content)
 """
 import os
-import requests
 import json
+import requests
 
 
 class Gist:
