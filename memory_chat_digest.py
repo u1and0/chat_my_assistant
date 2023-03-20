@@ -53,21 +53,6 @@ def get_content(resp_json: dict) -> str:
     return resp_json['choices'][0]['message']['content']
 
 
-def multi_input() -> str:
-    """複数行読み込み
-    空行で入力確定
-    """
-    lines = []
-    line = input(PROMPT)
-    lines.append(line)
-    while True:
-        line = input()
-        if line:
-            lines.append(line)
-        else:  # 入力がなければ(空行)入力を結合して返す
-            return "\n".join(lines)
-
-
 def print_one_by_one(text):
     """一文字ずつ出力"""
     for char in f"{text}\n":
@@ -78,8 +63,9 @@ def print_one_by_one(text):
             return
 
 
-async def wait_for_input(text: str, timeout: float) -> str:
+async def wait_for_input(timeout: float) -> str:
     """時間経過でタイムアウトエラーを発生させる"""
+    print("wait_for_input開始")
     silent_input = [
         "",
         "続けて",
@@ -98,15 +84,29 @@ async def wait_for_input(text: str, timeout: float) -> str:
         raise
     except asyncio.TimeoutError:
         # 5分黙っていたらランダムに一つ質問
-        text = random.choice(silent_input)
+        return random.choice(silent_input)
     except KeyboardInterrupt:
         sys.exit(1)
-    return text
 
 
 async def async_input() -> str:
     """ユーザーinputを非同期に待つ"""
     return await asyncio.get_running_loop().run_in_executor(None, multi_input)
+
+
+def multi_input() -> str:
+    """複数行読み込み
+    空行で入力確定
+    """
+    lines = []
+    line = input(PROMPT)
+    lines.append(line)
+    while True:
+        line = input()
+        if line:
+            lines.append(line)
+        else:  # 入力がなければ(空行)入力を結合して返す
+            return "\n".join(lines)
 
 
 @dataclass
@@ -122,12 +122,8 @@ class AI:
     gist: Gist = Gist("")
     chat_summary: str = ""
 
-    # name = "AI"
-    # filename = "chatgpt-assistant.txt"
-    # max_tokens = 1000
-    # temperature = 1.0
-    # system_role = "さっきの話の内容を聞かれたら、話をまとめてください。"
-    async def post(self, data: dict) -> str:
+    @staticmethod
+    async def post(data: dict) -> str:
         """POST question to ChatGPT API"""
         async with aiohttp.ClientSession() as session:
             async with session.post(ENDPOINT,
@@ -171,17 +167,8 @@ class AI:
         self.gist.patch(content)
         return content
 
-    async def _generate_json_payload(self, user_input: str) -> dict:
+    async def generate_json_payload(self, user_input: str) -> dict:
         """user_inputを受取り、POSTするJSONペイロードを作成"""
-        if not user_input:
-            user_input = await wait_for_input(user_input, timeout=TIMEOUT)
-        # 入力がなければ、再度質問待ち
-        if not user_input:
-            await self.ask()
-        user_input = user_input.strip().replace("/n", "")
-        if user_input in ("q", "exit"):
-            sys.exit(0)
-        # ChatGPTへのPOSTリクエスト用JSON
         messages = [{
             "role": "system",
             "content": self.system_role
@@ -202,15 +189,26 @@ class AI:
 
     async def ask(self, user_input: str = ""):
         """AIへの質問"""
-        data = await self._generate_json_payload(user_input)
+        if not user_input:
+            # ##BUG
+            # user inputがあるのにawait wait_for_inputが走る
+            user_input = await wait_for_input(TIMEOUT)
+            user_input = user_input.strip().replace("/n", "")
+            if user_input in ("q", "exit"):
+                sys.exit(0)
+            # 待っても入力がなければ、再度質問待ち
+            if not user_input:
+                await self.ask()
+        print(user_input + "受け取りました")
+        data = await self.generate_json_payload(user_input)
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
-        spinner_task = asyncio.create_task(spinner())
+        spinner_task = asyncio.create_task(spinner())  # スピナー表示
         try:
             ai_response: str = await self.post(data)
         except KeyboardInterrupt:
             print()
-            await ai.ask()
+            await self.ask()
         finally:
             spinner_task.cancel()
         # 会話を要約
@@ -219,7 +217,7 @@ class AI:
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
-        await ai.ask()
+        await self.ask()
 
 
 def AI_constractor() -> list[AI]:
@@ -232,17 +230,19 @@ def AI_constractor() -> list[AI]:
 if __name__ == "__main__":
     # Parse args
     parser = argparse.ArgumentParser(description="ChatGPT client")
-    parser.add_argument("--character",
-                        "-c",
-                        help="AIキャラクタ指定(default=クリステル)",
-                        default="ChatGPT")
-    parser.add_argument("--voice", "-v", help="AI音声(default=ずんだもん)")
+    parser.add_argument(
+        "--character",
+        "-c",
+        default="ChatGPT",
+        help="AIキャラクタ指定(default=ChatGPT)",
+    )
+    parser.add_argument(
+        "--voice",
+        "-v",
+        default=None,
+        help="AI音声(default=None)",
+    )
     args = parser.parse_args()
-    lines = []
-    for line in sys.stdin:
-        lines.append(line)
-    question = "\n".join(lines)
-    print(question)
     # Load AI characters
     ais: list[AI] = AI_constractor()
     ai = [a for a in ais if a.name == args.character][-1]
@@ -251,4 +251,9 @@ if __name__ == "__main__":
     ai.chat_summary = ai.gist.get()
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")
+    # stdinがあるとき、それをquestionに
+    # stdinがないとき、空文字を渡してプロンプトで入力待ち受け
+    question = "" if sys.stdin.isatty() else sys.stdin.read()
+    if question:
+        print(f"{PROMPT}{question}")
     asyncio.run(ai.ask(question))
