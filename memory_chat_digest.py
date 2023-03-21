@@ -16,6 +16,7 @@ import asyncio
 import yaml
 import aiohttp
 from gist_memory import Gist
+from voicevox_audio import CV, Mode, play_voice
 
 # ChatGPT API Key
 API_KEY = os.getenv("CHATGPT_API_KEY")
@@ -59,13 +60,13 @@ def print_one_by_one(text):
         try:
             print(char, end="", flush=True)
             sleep(INTERVAL)
+            # asyncio.sleep(INTERVAL)
         except KeyboardInterrupt:
             return
 
 
 async def wait_for_input(timeout: float) -> str:
     """時間経過でタイムアウトエラーを発生させる"""
-    print("wait_for_input開始")
     silent_input = [
         "",
         "続けて",
@@ -199,7 +200,6 @@ class AI:
             # 待っても入力がなければ、再度質問待ち
             if not user_input:
                 await self.ask()
-        print(user_input + "受け取りました")
         data = await self.generate_json_payload(user_input)
         # 回答を考えてもらう
         # ai_responseが出てくるまで待つ
@@ -215,7 +215,9 @@ class AI:
         # create_taskして完了を待たずにai_responseをprintする
         asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
+        # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
         print_one_by_one(f"{self.name}: {ai_response}\n")
+        play_voice(ai_response, CV.四国めたんあまあま, Mode.LOCAL)
         # 次の質問
         await self.ask()
 

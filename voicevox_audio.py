@@ -13,6 +13,7 @@ import os
 import sys
 from io import BytesIO
 import json
+from typing import Union
 from enum import IntEnum, auto
 import argparse
 import requests
@@ -138,7 +139,7 @@ class CV(IntEnum):
         WARNING: IDに抜けがあるとValueErrorで一覧表示できない
         """
         dic = {}
-        i = 1
+        i = 0
         while True:
             try:
                 dic[i] = CV(i)
@@ -170,19 +171,19 @@ def check_point() -> dict:
     return requests.get(f"{fast_url}/api", params={"key": apikey}).text
 
 
-def audio_query(text: str, speaker: CV = CV(0)) -> requests.Response:
+def audio_query(text: str, speaker: Union[int, CV] = 0) -> requests.Response:
     """音声の合成用クエリの作成"""
     headers = {"accept": "application/json"}
-    params = {"text": text, "speaker": speaker}
+    params = {"text": text, "speaker": int(speaker)}
     return requests.post(f"{local_url}/audio_query",
                          headers=headers,
                          params=params)
 
 
-def synthesis(data, speaker: CV = CV(0)) -> requests.Response:
+def synthesis(data, speaker: Union[int, CV] = CV(0)) -> requests.Response:
     """音声合成するAPI"""
     headers = {"accept": "audio/wav", "Content-Type": "application/json"}
-    params = {"speaker": speaker}
+    params = {"speaker": int(speaker)}
     return requests.post(f"{local_url}/synthesis",
                          headers=headers,
                          data=json.dumps(data),
@@ -190,22 +191,22 @@ def synthesis(data, speaker: CV = CV(0)) -> requests.Response:
 
 
 def get_voice(text,
-              speaker: CV = CV(0),
-              mode: Mode = Mode.SLOW) -> requests.Response:
+              speaker: Union[int, CV] = CV(0),
+              mode: Union[int, Mode] = Mode.SLOW) -> requests.Response:
     """VOICEVOX web apiへアクセスしてaudioレスポンスを得る"""
     if mode == 3:
         body = audio_query(text, speaker=speaker).json()
         response = synthesis(body, speaker=speaker)
         return response
     elif mode == 2:
-        params = {"key": apikey, "speaker": speaker, "text": text}
+        params = {"key": apikey, "speaker": int(speaker), "text": text}
         response = requests.get(f"{fast_url}/voicevox/audio", params)
         return response
     # else mode == 1:
     wav_api = requests.get(
         f"{url}/voicevox",  # 末尾のスラッシュがないとエラー
         params={
-            "speaker": speaker,
+            "speaker": int(speaker),
             "text": text
         })
     if wav_api.status_code != 200:
@@ -216,7 +217,7 @@ def get_voice(text,
     return response
 
 
-def build_audio(binary, wav_file=""):
+def build_audio(binary, wav_file=None):
     """audioバイナリを作成
     ファイルパス wav_fileが渡されたらそのファイルにwavを保存する。
     """
@@ -226,6 +227,15 @@ def build_audio(binary, wav_file=""):
     else:
         wav_file = BytesIO(binary)
     return AudioSegment.from_wav(wav_file)
+
+
+def play_voice(text,
+               speaker: Union[int, CV] = CV.四国めたんあまあま,
+               mode: Union[int, Mode] = Mode.SLOW):
+    """テキストの再生"""
+    resp = get_voice(text, speaker, mode)
+    audio = build_audio(resp.content, wav_file="sample.wav")
+    play(audio)
 
 
 if __name__ == "__main__":
@@ -240,6 +250,4 @@ if __name__ == "__main__":
     #     resp = get_voice(text)
     # except requests.HTTPError:
     #     resp = get_voice(text, mode=Mode.FAST)
-    resp = get_voice(args.text, speaker=args.speaker, mode=Mode.LOCAL)
-    audio = build_audio(resp.content, wav_file="sample.wav")
-    play(audio)
+    play_voice(args.text, speaker=args.speaker, mode=Mode.LOCAL)
