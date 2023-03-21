@@ -16,8 +16,8 @@ import json
 from enum import IntEnum, auto
 import argparse
 import requests
-# from pydub import AudioSegment
-# from pydub.playback import play
+from pydub import AudioSegment
+from pydub.playback import play
 
 apikey = os.getenv("VOICEVOX_API_KEY")
 url = "https://api.tts.quest/v1"
@@ -25,16 +25,7 @@ fast_url = "https://api.su-shiki.com/v2"
 local_url = "http://localhost:50021"
 
 
-class BidirectionalEnum(IntEnum):
-    @classmethod
-    def _missing_(cls, value):
-        for member in cls:
-            if member.value == value:
-                return member
-        return super()._missing_(value)
-
-
-class CV(BidirectionalEnum):
+class CV(IntEnum):
     """VOICEVOX Characters Voice IDs
 
     $ curl -fsSL 'https://api.su-shiki.com/v2/voicevox/speakers?key={API_KEY}' | jq
