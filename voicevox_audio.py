@@ -234,7 +234,7 @@ def play_voice(text,
                mode: Union[int, Mode] = Mode.SLOW):
     """テキストの再生"""
     resp = get_voice(text, speaker, mode)
-    audio = build_audio(resp.content, wav_file="sample.wav")
+    audio = build_audio(resp.content)
     play(audio)
 
 

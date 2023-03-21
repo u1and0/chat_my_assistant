@@ -216,8 +216,8 @@ class AI:
         asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
-        print_one_by_one(f"{self.name}: {ai_response}\n")
         play_voice(ai_response, CV.四国めたんあまあま, Mode.LOCAL)
+        print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask()
 
