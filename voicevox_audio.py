@@ -11,15 +11,21 @@ fast=Trueオプションで高速URLを使用します。
 """
 import os
 from io import BytesIO
-import subprocess
-from time import sleep
+from enum import IntEnum, auto
 import requests
-from pydub import AudioSegment
+from pydub import AudioSegment  # , exceptions
 from pydub.playback import play
 
 apikey = os.getenv("VOICEVOX_API_KEY")
 url = "https://api.tts.quest/v1"
 fast_url = "https://api.su-shiki.com/v2"
+
+
+class Mode(IntEnum):
+    """VOICEVOX mode"""
+    SLOW = auto()
+    FAST = auto()
+    LOCAL = auto()
 
 
 def check_point():
@@ -29,15 +35,19 @@ def check_point():
     return requests.get(f"{fast_url}/api", params={"key": apikey}).text
 
 
-def get_voice(text, character_id=0, fast=False) -> requests.Response:
+def get_voice(text,
+              character_id=0,
+              mode: Mode = Mode.SLOW) -> requests.Response:
     """VOICEVOX web apiへアクセスしてaudioレスポンスを得る"""
-    if fast:
+    # if mode ==3:
+    # raise CouldntDecodeError
+    if mode == 2:
         params = {"key": apikey, "speaker": character_id, "text": text}
         resp = requests.get(f"{fast_url}/voicevox/audio", params)
         return resp
+    # else mode == 1:
     wav_api = requests.get(
         f"{url}/voicevox",  # 末尾のスラッシュがないとエラー
-        # f"{url}/voicevox/?text={text}&speaker=0",
         params={
             "speaker": character_id,
             "text": text
@@ -62,13 +72,12 @@ def build_audio(binary, wav_file=""):
     return AudioSegment.from_wav(wav_file)
 
 
-text = "今日の朝ご飯はなに？"
+text = "こんにちわ、しゅかちゃん"
 # リクエスト過多の429エラーが出たときには
 # fastバージョンを使う
 try:
     resp = get_voice(text)
 except requests.HTTPError:
-    resp = get_voice(text, fast=True)
-print("GET from: ", resp.url)
-audio = build_audio(resp.content)
+    resp = get_voice(text, mode=Mode.FAST)
+audio = build_audio(resp.content, wav_file="sample.wav")
 play(audio)
