@@ -10,6 +10,7 @@ fast=Trueオプションで高速URLを使用します。
 確認の仕方はcheck_point()
 """
 import os
+import sys
 from io import BytesIO
 import json
 from enum import IntEnum, auto
@@ -97,7 +98,7 @@ def build_audio(binary, wav_file=""):
 
 
 if __name__ == "__main__":
-    text = "こんにちわ、しゅかちゃん。わたしはめたんちゃん。るなちゃんと仲良くしてね"
+    text = sys.argv[-1]
     # リクエスト過多の429エラーが出たときには
     # fastバージョンを使う
     # try:
