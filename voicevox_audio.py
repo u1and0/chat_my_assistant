@@ -72,12 +72,13 @@ def build_audio(binary, wav_file=""):
     return AudioSegment.from_wav(wav_file)
 
 
-text = "こんにちわ、しゅかちゃん"
-# リクエスト過多の429エラーが出たときには
-# fastバージョンを使う
-try:
-    resp = get_voice(text)
-except requests.HTTPError:
-    resp = get_voice(text, mode=Mode.FAST)
-audio = build_audio(resp.content, wav_file="sample.wav")
-play(audio)
+if __name__ == "__main__":
+    text = "こんにちわ、しゅかちゃん"
+    # リクエスト過多の429エラーが出たときには
+    # fastバージョンを使う
+    try:
+        resp = get_voice(text)
+    except requests.HTTPError:
+        resp = get_voice(text, mode=Mode.FAST)
+    audio = build_audio(resp.content, wav_file="sample.wav")
+    play(audio)
