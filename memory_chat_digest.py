@@ -8,6 +8,7 @@ import os
 import sys
 import json
 from dataclasses import dataclass
+from typing import Optional
 import random
 from time import sleep
 import argparse
@@ -31,8 +32,8 @@ HEADERS = {
 INTERVAL = 0.02
 # 質問待受時間(秒)
 TIMEOUT = 300
-# AI キャラクター設定ファイル
-CONFIG_FILE = "./character.yml"
+# AI キャラクター設定ファイル名
+CONFIG_FILE = "character.yml"
 # 質問待受で表示されるプロンプト
 PROMPT = "あなた: "
 # 要約文の最大トークン数
@@ -122,6 +123,7 @@ class AI:
     # 長期記憶
     gist: Gist = Gist("")
     chat_summary: str = ""
+    sound: bool = True
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -216,21 +218,27 @@ class AI:
         asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
-        play_voice(ai_response, CV.四国めたんあまあま, Mode.LOCAL)
+        if self.sound:
+            play_voice(ai_response, CV.四国めたんあまあま, Mode.LOCAL)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask()
 
 
-def AI_constractor() -> list[AI]:
+def AI_constractor(character_path: Optional[str] = None) -> list[AI]:
     """yamlファイルを読み込んでAIキャラクタ設定リストを返す"""
-    with open(CONFIG_FILE, "r", encoding="utf-8") as f:
-        config = yaml.safe_load(f)
+    if not character_path:
+        gist = Gist(CONFIG_FILE)
+        yaml_str = gist.get()
+        config = yaml.safe_load(yaml_str)
+    else:
+        with open(character_path, "r", encoding="utf-8") as yaml_str:
+            config = yaml.safe_load(yaml_str)
     return [AI(**c) for c in config]
 
 
-if __name__ == "__main__":
-    # Parse args
+def parse_args() -> argparse.Namespace:
+    """引数解析"""
     parser = argparse.ArgumentParser(description="ChatGPT client")
     parser.add_argument(
         "--character",
@@ -239,18 +247,28 @@ if __name__ == "__main__":
         help="AIキャラクタ指定(default=ChatGPT)",
     )
     parser.add_argument(
-        "--voice",
-        "-v",
-        default=None,
+        "--sound",
+        "-s",
+        action="store_true",
         help="AI音声(default=None)",
     )
-    args = parser.parse_args()
-    # Load AI characters
+    return parser.parse_args()
+
+
+def ai_constructor(character: str, sound: bool) -> AI:
+    """Load AI characters"""
     ais: list[AI] = AI_constractor()
-    ai = [a for a in ais if a.name == args.character][-1]
+    ai = [a for a in ais if a.name == character][-1]
     # Load chat history
     ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
+    ai.sound = sound
+    return ai
+
+
+if __name__ == "__main__":
+    args = parse_args()
+    ai = ai_constructor(character=args.character, sound=args.sound)
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")
     # stdinがあるとき、それをquestionに
