@@ -1,4 +1,4 @@
-from enum import IntEnum, auto
+from enum import IntEnum
 
 
 class CV(IntEnum):
@@ -118,12 +118,12 @@ class CV(IntEnum):
         return self.__str__()
 
     @classmethod
-    def table(cls):
+    def items(cls):
         """CV一覧
-        ID: キャラクター名
+        ID: キャラクター名 の辞書を返す。
         WARNING: IDに抜けがあるとValueErrorで一覧表示できない
         """
-        return {int(p): p for p in CV}
+        return {int(p): p for p in cls}
 
     @classmethod
     def from_string(cls, value):
