@@ -8,7 +8,7 @@ import os
 import sys
 import json
 from dataclasses import dataclass
-from typing import Optional
+from typing import Optional, Union
 import random
 from time import sleep
 import argparse
@@ -112,6 +112,7 @@ def multi_input() -> str:
 
 @dataclass
 class BaseAI:
+    """AI base character"""
     name: str = "ChatGPT"
     max_tokens: int = 1000
     temperature: float = 0.2
@@ -225,8 +226,9 @@ class BaseAI:
 
 @dataclass
 class AI(BaseAI):
-    """AI base character"""
-    # yamlから読み込んだキャラクタ設定
+    """AI modified character
+    yamlから読み込んだキャラクタ設定
+    """
     name: str
     max_tokens: int
     temperature: float
@@ -236,18 +238,18 @@ class AI(BaseAI):
 
 def ai_constructor(character: str = "ChatGPT",
                    sound: bool = False,
-                   character_path: Optional[str] = None) -> AI:
+                   character_path: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、
-    characterで指定されたAIキャラクタを返す
+    character.ymlで指定されたAIキャラクタを返す
     """
-    if not character_path:
+    if character_path:  # ローカルのキャラ設定YAMLファイルが指定されたとき
+        with open(character_path, "r", encoding="utf-8") as yaml_str:
+            config = yaml.safe_load(yaml_str)
+    else:  # キャラ設定YAMLファイルが指定されなければGist上のキャラ設定を読みに行く
         gist = Gist(CONFIG_FILE)
         yaml_str = gist.get()
         config = yaml.safe_load(yaml_str)
-    else:
-        with open(character_path, "r", encoding="utf-8") as yaml_str:
-            config = yaml.safe_load(yaml_str)
-    ais: list[AI] = [AI(**c) for c in config]
+    ais: list[Union[AI, BaseAI]] = [AI(**c) for c in config]
     ais.append(BaseAI())
     ai = [a for a in ais if a.name == character][-1]
     # Load chat history
