@@ -123,15 +123,7 @@ class CV(IntEnum):
         ID: キャラクター名
         WARNING: IDに抜けがあるとValueErrorで一覧表示できない
         """
-        dic = {}
-        i = 0
-        while True:
-            try:
-                dic[i] = CV(i)
-                i += 1
-            except ValueError:
-                break
-        return dic
+        return {int(p): p for p in CV}
 
     @classmethod
     def from_string(cls, value):
