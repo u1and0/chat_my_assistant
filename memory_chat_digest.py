@@ -111,18 +111,16 @@ def multi_input() -> str:
 
 
 @dataclass
-class AI:
-    """AI base character"""
-    # yamlから読み込んだキャラクタ設定
-    name: str
-    max_tokens: int
-    temperature: float
-    system_role: str
-    filename: str
+class BaseAI:
+    name: str = "ChatGPT"
+    max_tokens: int = 1000
+    temperature: float = 0.2
+    system_role: str = "さっきの話の内容を聞れたら、話をまとめてください。"
+    filename: str = "chatgpt-assistant.txt"
     # 長期記憶
     gist: Gist = Gist("")
     chat_summary: str = ""
-    sound: bool = True
+    sound: bool = False
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -225,8 +223,23 @@ class AI:
         await self.ask()
 
 
-def AI_constractor(character_path: Optional[str] = None) -> list[AI]:
-    """yamlファイルを読み込んでAIキャラクタ設定リストを返す"""
+@dataclass
+class AI(BaseAI):
+    """AI base character"""
+    # yamlから読み込んだキャラクタ設定
+    name: str
+    max_tokens: int
+    temperature: float
+    system_role: str
+    filename: str
+
+
+def ai_constructor(character: str = "ChatGPT",
+                   sound: bool = False,
+                   character_path: Optional[str] = None) -> AI:
+    """YAMLファイルから設定リストを読み込み、
+    characterで指定されたAIキャラクタを返す
+    """
     if not character_path:
         gist = Gist(CONFIG_FILE)
         yaml_str = gist.get()
@@ -234,7 +247,14 @@ def AI_constractor(character_path: Optional[str] = None) -> list[AI]:
     else:
         with open(character_path, "r", encoding="utf-8") as yaml_str:
             config = yaml.safe_load(yaml_str)
-    return [AI(**c) for c in config]
+    ais: list[AI] = [AI(**c) for c in config]
+    ais.append(BaseAI())
+    ai = [a for a in ais if a.name == character][-1]
+    # Load chat history
+    ai.gist = Gist(ai.filename)
+    ai.chat_summary = ai.gist.get()
+    ai.sound = sound
+    return ai
 
 
 def parse_args() -> argparse.Namespace:
@@ -253,17 +273,6 @@ def parse_args() -> argparse.Namespace:
         help="AI音声(default=None)",
     )
     return parser.parse_args()
-
-
-def ai_constructor(character: str, sound: bool) -> AI:
-    """Load AI characters"""
-    ais: list[AI] = AI_constractor()
-    ai = [a for a in ais if a.name == character][-1]
-    # Load chat history
-    ai.gist = Gist(ai.filename)
-    ai.chat_summary = ai.gist.get()
-    ai.sound = sound
-    return ai
 
 
 if __name__ == "__main__":
