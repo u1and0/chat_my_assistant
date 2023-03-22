@@ -17,7 +17,6 @@ import asyncio
 import yaml
 import aiohttp
 from gist_memory import Gist
-from voicevox_audio import CV, Mode, play_voice
 
 # ChatGPT API Key
 API_KEY = os.getenv("CHATGPT_API_KEY")
@@ -219,6 +218,7 @@ class AI:
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
         if self.sound:
+            from voicevox_audio import CV, Mode, play_voice
             play_voice(ai_response, CV.四国めたんあまあま, Mode.LOCAL)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
