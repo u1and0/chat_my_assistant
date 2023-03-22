@@ -249,10 +249,13 @@ def ai_constructor(character: str = "ChatGPT",
         gist = Gist(CONFIG_FILE)
         yaml_str = gist.get()
         config = yaml.safe_load(yaml_str)
-    ais: list[Union[AI, BaseAI]] = []
+    # YAMLファイルから読んだカスタムAIのリストとBaseAI
+    ais: list[Union[AI, BaseAI]]
     if config:
         ais = [AI(**c) for c in config]
     ais.append(BaseAI())
+    # character引数で指定されたnameのAIを選択
+    #  同名があったらYAMLファイルの下の行にあるものを優先する。
     ai = [a for a in ais if a.name == character][-1]
     # Load chat history
     ai.gist = Gist(ai.filename)
