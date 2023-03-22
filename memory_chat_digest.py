@@ -238,18 +238,20 @@ class AI(BaseAI):
 
 def ai_constructor(character: str = "ChatGPT",
                    sound: bool = False,
-                   character_path: Optional[str] = None) -> Union[AI, BaseAI]:
+                   character_file: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、
     character.ymlで指定されたAIキャラクタを返す
     """
-    if character_path:  # ローカルのキャラ設定YAMLファイルが指定されたとき
-        with open(character_path, "r", encoding="utf-8") as yaml_str:
+    if character_file:  # ローカルのキャラ設定YAMLファイルが指定されたとき
+        with open(character_file, "r", encoding="utf-8") as yaml_str:
             config = yaml.safe_load(yaml_str)
     else:  # キャラ設定YAMLファイルが指定されなければGist上のキャラ設定を読みに行く
         gist = Gist(CONFIG_FILE)
         yaml_str = gist.get()
         config = yaml.safe_load(yaml_str)
-    ais: list[Union[AI, BaseAI]] = [AI(**c) for c in config]
+    ais: list[Union[AI, BaseAI]] = []
+    if config:
+        ais = [AI(**c) for c in config]
     ais.append(BaseAI())
     ai = [a for a in ais if a.name == character][-1]
     # Load chat history
@@ -274,12 +276,19 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="AI音声(default=None)",
     )
+    parser.add_argument(
+        "--yaml",
+        "-y",
+        help="AIカスタム設定YAMLのファイルパス",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
-    ai = ai_constructor(character=args.character, sound=args.sound)
+    ai = ai_constructor(character=args.character,
+                        sound=args.sound,
+                        character_file=args.yaml)
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")
     # stdinがあるとき、それをquestionに
