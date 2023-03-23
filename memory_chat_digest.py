@@ -99,15 +99,9 @@ def multi_input() -> str:
     """複数行読み込み
     空行で入力確定
     """
-    lines = []
     line = input(PROMPT)
-    lines.append(line)
-    while True:
-        line = input()
-        if line:
-            lines.append(line)
-        else:  # 入力がなければ(空行)入力を結合して返す
-            return "\n".join(lines)
+    lines = "\n".join(iter(input, ""))
+    return line + lines
 
 
 @dataclass
