@@ -116,7 +116,8 @@ class BaseAI:
     # 長期記憶
     gist: Gist = Gist("")
     chat_summary: str = ""
-    sound: Mode = Mode.SLOW
+    voice: Mode = Mode.NONE
+    speaker: str = "ナースロボタイプ楽々"
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -211,9 +212,9 @@ class BaseAI:
         asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
-        if self.sound > 0:
+        if self.voice > 0:
             from voicevox_audio import play_voice
-            play_voice(ai_response, CV.四国めたんあまあま, self.sound)
+            play_voice(ai_response, CV[self.speaker], self.voice)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask()
@@ -229,10 +230,12 @@ class AI(BaseAI):
     temperature: float
     system_role: str
     filename: str
+    voice: str
 
 
 def ai_constructor(character: str = "ChatGPT",
-                   sound: int = 0,
+                   voice: int = 0,
+                   speaker: Optional[str] = None,
                    character_file: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、
     character.ymlで指定されたAIキャラクタを返す
@@ -252,10 +255,12 @@ def ai_constructor(character: str = "ChatGPT",
     # character引数で指定されたnameのAIを選択
     #  同名があったらYAMLファイルの下の行にあるものを優先する。
     ai = [a for a in ais if a.name == character][-1]
+    # コマンドライン引数から設定するキャラの追加設定
     # Load chat history
     ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
-    ai.sound = Mode(sound)
+    ai.voice = Mode(voice)
+    ai.speaker = speaker if speaker else ai.speaker
     return ai
 
 
@@ -269,11 +274,18 @@ def parse_args() -> argparse.Namespace:
         help="AIキャラクタ指定(default=ChatGPT)",
     )
     parser.add_argument(
-        "--sound",
-        "-s",
+        "--voice",
+        "-v",
         action="count",
         default=0,
-        help="AI音声(default=None)",
+        help="AI音声の生成先\
+        (-v=SLOW, -vv=FAST, -vvv=LOCAL, default=None = 音声で話さない)",
+    )
+    parser.add_argument(
+        "--speaker",
+        "-s",
+        default=None,
+        help="VOICEVOX キャラクターボイス(str or int, default None)",
     )
     parser.add_argument(
         "--yaml",
@@ -286,7 +298,8 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     ai = ai_constructor(character=args.character,
-                        sound=args.sound,
+                        voice=args.voice,
+                        speaker=args.speaker,
                         character_file=args.yaml)
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")

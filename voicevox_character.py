@@ -3,6 +3,7 @@ from enum import IntEnum, auto
 
 class Mode(IntEnum):
     """VOICEVOX mode"""
+    NONE = 0
     SLOW = auto()
     FAST = auto()
     LOCAL = auto()
@@ -105,10 +106,11 @@ class CV(IntEnum):
 
     小夜SAYOノーマル = 46
 
-    ナースロボ＿タイプＴノーマル = 47
-    ナースロボ＿タイプＴ楽々 = 48
-    ナースロボ＿タイプＴ恐怖 = 49
-    ナースロボ＿タイプＴ内緒話 = 50
+    # ナースロボ＿タイプＴノーマル だとIntEnumが正しく読み込まない
+    ナースロボタイプノーマル = 47
+    ナースロボタイプ楽々 = 48
+    ナースロボタイプ恐怖 = 49
+    ナースロボタイプ内緒話 = 50
 
     聖騎士紅桜ノーマル = 51
     雀松朱司ノーマル = 52
