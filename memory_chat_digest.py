@@ -17,6 +17,7 @@ import asyncio
 import yaml
 import aiohttp
 from gist_memory import Gist
+from voicevox_character import CV, Mode
 
 # ChatGPT API Key
 API_KEY = os.getenv("CHATGPT_API_KEY")
@@ -115,7 +116,7 @@ class BaseAI:
     # 長期記憶
     gist: Gist = Gist("")
     chat_summary: str = ""
-    sound: bool = False
+    sound: Mode = Mode.SLOW
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -210,9 +211,9 @@ class BaseAI:
         asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
-        if self.sound:
-            from voicevox_audio import CV, Mode, play_voice
-            play_voice(ai_response, CV.四国めたんあまあま, Mode.LOCAL)
+        if self.sound > 0:
+            from voicevox_audio import play_voice
+            play_voice(ai_response, CV.四国めたんあまあま, self.sound)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask()
@@ -231,7 +232,7 @@ class AI(BaseAI):
 
 
 def ai_constructor(character: str = "ChatGPT",
-                   sound: bool = False,
+                   sound: int = 0,
                    character_file: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、
     character.ymlで指定されたAIキャラクタを返す
@@ -254,7 +255,7 @@ def ai_constructor(character: str = "ChatGPT",
     # Load chat history
     ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
-    ai.sound = sound
+    ai.sound = Mode(sound)
     return ai
 
 
@@ -270,7 +271,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--sound",
         "-s",
-        action="store_true",
+        action="count",
+        default=0,
         help="AI音声(default=None)",
     )
     parser.add_argument(

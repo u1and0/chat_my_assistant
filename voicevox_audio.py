@@ -13,24 +13,17 @@ import os
 from io import BytesIO
 import json
 from typing import Union
-from enum import IntEnum, auto
+from time import sleep
 import argparse
 import requests
 from pydub import AudioSegment
 from pydub.playback import play
-from voicevox_character import CV
+from voicevox_character import CV, Mode
 
 apikey = os.getenv("VOICEVOX_API_KEY")
 url = "https://api.tts.quest/v1"
 fast_url = "https://api.su-shiki.com/v2"
 local_url = "http://localhost:50021"
-
-
-class Mode(IntEnum):
-    """VOICEVOX mode"""
-    SLOW = auto()
-    FAST = auto()
-    LOCAL = auto()
 
 
 def check_point() -> dict:
@@ -63,15 +56,15 @@ def get_voice(text,
               speaker: Union[int, CV] = CV(0),
               mode: Union[int, Mode] = Mode.SLOW) -> requests.Response:
     """VOICEVOX web apiへアクセスしてaudioレスポンスを得る"""
-    if mode == 3:
+    if mode == 3: # Mode LOCAL
         body = audio_query(text, speaker=speaker).json()
         response = synthesis(body, speaker=speaker)
         return response
-    elif mode == 2:
+    elif mode == 2: # Mode FAST
         params = {"key": apikey, "speaker": int(speaker), "text": text}
         response = requests.get(f"{fast_url}/voicevox/audio", params)
         return response
-    # else mode == 1:
+    # Mode SLOW
     wav_api = requests.get(
         f"{url}/voicevox",  # 末尾のスラッシュがないとエラー
         params={
@@ -82,6 +75,7 @@ def get_voice(text,
         print("Warnig: Use fast mode")
         raise requests.HTTPError(wav_api.status_code)
     wav_url = wav_api.json()["wavDownloadUrl"]
+    sleep(3)
     response = requests.get(wav_url)
     return response
 
@@ -113,6 +107,11 @@ if __name__ == "__main__":
                         "--speaker",
                         default=0,
                         help="VOICEVOX Character voice ID")
+    parser.add_argument("-v",
+                        "--voicemode",
+                        action="count",
+                        default=0,
+                        help="VOICEVOX モード Local Fast Slow")
     parser.add_argument("text", help="VOICEVOXに話させる文字列")
     args = parser.parse_args()
     # リクエスト過多の429エラーが出たときには
@@ -121,4 +120,5 @@ if __name__ == "__main__":
     #     resp = get_voice(text)
     # except requests.HTTPError:
     #     resp = get_voice(text, mode=Mode.FAST)
-    play_voice(args.text, speaker=args.speaker, mode=Mode.LOCAL)
+    print(Mode(args.voicemode))
+    play_voice(args.text, speaker=args.speaker, mode=Mode(args.voicemode))

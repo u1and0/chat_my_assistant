@@ -1,4 +1,11 @@
-from enum import IntEnum
+from enum import IntEnum, auto
+
+
+class Mode(IntEnum):
+    """VOICEVOX mode"""
+    SLOW = auto()
+    FAST = auto()
+    LOCAL = auto()
 
 
 class CV(IntEnum):
