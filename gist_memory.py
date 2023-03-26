@@ -27,8 +27,10 @@ class Gist:
 
     def get(self):
         """会話履歴を取得"""
-        resp = requests.get(Gist.url).json()
-        content = resp["files"][self.filename]["content"]
+        resp = requests.get(Gist.url)
+        if resp.status_code != 200:
+            raise requests.HTTPError(f"{resp.json()}")
+        content = resp.json()["files"][self.filename]["content"]
         return content
 
     def patch(self, body):
