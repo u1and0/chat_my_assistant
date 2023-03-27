@@ -16,8 +16,8 @@ from itertools import cycle
 import asyncio
 import yaml
 import aiohttp
-from gist_memory import Gist
-from voicevox_character import CV, Mode
+from lib.gist_memory import Gist
+from lib.voicevox_character import CV, Mode
 
 # ChatGPT API Key
 API_KEY = os.getenv("CHATGPT_API_KEY")
