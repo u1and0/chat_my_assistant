@@ -218,8 +218,8 @@ class BaseAI:
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
         if self.voice > 0:
-            from voicevox_audio import play_voice
-            play_voice(ai_response, CV[self.speaker], self.voice)
+            from lib.voicevox_audio import play_voice
+            play_voice(ai_response, self.speaker, self.voice)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask()

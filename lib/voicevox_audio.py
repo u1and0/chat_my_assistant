@@ -18,7 +18,7 @@ import argparse
 import requests
 from pydub import AudioSegment
 from pydub.playback import play
-from voicevox_character import CV, Mode
+from .voicevox_character import CV, Mode
 
 apikey = os.getenv("VOICEVOX_API_KEY")
 url = "https://api.tts.quest/v1"
@@ -56,11 +56,11 @@ def get_voice(text,
               speaker: Union[int, CV] = CV(0),
               mode: Union[int, Mode] = Mode.SLOW) -> requests.Response:
     """VOICEVOX web apiへアクセスしてaudioレスポンスを得る"""
-    if mode == 3: # Mode LOCAL
+    if mode == 3:  # Mode LOCAL
         body = audio_query(text, speaker=speaker).json()
         response = synthesis(body, speaker=speaker)
         return response
-    elif mode == 2: # Mode FAST
+    elif mode == 2:  # Mode FAST
         params = {"key": apikey, "speaker": int(speaker), "text": text}
         response = requests.get(f"{fast_url}/voicevox/audio", params)
         return response
