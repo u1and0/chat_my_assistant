@@ -60,7 +60,6 @@ def print_one_by_one(text):
         try:
             print(char, end="", flush=True)
             sleep(INTERVAL)
-            # asyncio.sleep(INTERVAL)
         except KeyboardInterrupt:
             return
 
@@ -235,8 +234,16 @@ def ai_constructor(character: str = "ChatGPT",
                    voice: int = 0,
                    speaker: Union[int, str] = 0,
                    character_file: Optional[str] = None) -> Union[AI, BaseAI]:
-    """YAMLファイルから設定リストを読み込み、
-    character.ymlで指定されたAIキャラクタを返す
+    """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
+
+    Args:
+        character: 選択するAIキャラクタの名前。
+        voice: AIの音声生成モード。
+        speaker: AIの発話用テキスト読み上げキャラクター。
+        character_file: ローカルのキャラ設定YAMLファイルのパス
+
+    Returns:
+        選択されたAIキャラクタのインスタンス。
     """
     if character_file:  # ローカルのキャラ設定YAMLファイルが指定されたとき
         with open(character_file, "r", encoding="utf-8") as yaml_str:
@@ -246,20 +253,25 @@ def ai_constructor(character: str = "ChatGPT",
         gist = Gist(CONFIG_FILE)
         yaml_str = gist.get()
         config = yaml.safe_load(yaml_str)
+    if config is None:
+        raise ValueError("キャラクター設定ファイルが存在しません。")
+
     # YAMLファイルから読んだカスタムAIのリストとBaseAI
-    ais: list[Union[AI, BaseAI]]
-    if config:
-        ais = [AI(**c) for c in config]
+    ais = [AI(**c) for c in config]
     ais.insert(0, BaseAI())
+
     # character引数で指定されたnameのAIを選択
     #  同名があったらYAMLファイルの下の行にあるものを優先する。
     ai = [a for a in ais if a.name == character][-1]
-    # コマンドライン引数から設定するキャラの追加設定
-    # Load chat history
+
+    # コマンドライン引数から設定を適用
     if not character_file:
+        # 会話履歴を読み込む
         ai.gist = Gist(ai.filename)
-    ai.chat_summary = ai.gist.get()
+        ai.chat_summary = ai.gist.get()
+    # AIの音声生成モードを設定
     ai.voice = Mode(voice)
+    # AIの発話用テキスト読み上げキャラクターを設定
     if isinstance(speaker, int):
         ai.speaker = CV(speaker)
     elif isinstance(speaker, str):
