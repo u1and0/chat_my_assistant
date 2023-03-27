@@ -112,11 +112,10 @@ class BaseAI:
     temperature: float = 1.0
     system_role: str = "さっきの話の内容を聞れたら、話をまとめてください。"
     filename: str = "chatgpt-assistant.txt"
-    # 長期記憶
-    gist: str = ""
-    chat_summary: str = ""
-    voice: Mode = Mode.NONE
-    speaker: str = "ナースロボタイプ楽々"
+    gist: str = ""  # 長期記憶
+    chat_summary: str = ""  # 会話履歴
+    voice: Mode = Mode.NONE  # AI音声の取得先
+    speaker: CV = CV.ナースロボタイプ楽々  # AI音声の種類
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -234,7 +233,7 @@ class AI(BaseAI):
 
 def ai_constructor(character: str = "ChatGPT",
                    voice: int = 0,
-                   speaker: Optional[str] = None,
+                   speaker: Union[int, str] = 0,
                    character_file: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、
     character.ymlで指定されたAIキャラクタを返す
@@ -251,7 +250,7 @@ def ai_constructor(character: str = "ChatGPT",
     ais: list[Union[AI, BaseAI]]
     if config:
         ais = [AI(**c) for c in config]
-    ais.append(BaseAI())
+    ais.insert(0, BaseAI())
     # character引数で指定されたnameのAIを選択
     #  同名があったらYAMLファイルの下の行にあるものを優先する。
     ai = [a for a in ais if a.name == character][-1]
@@ -261,12 +260,27 @@ def ai_constructor(character: str = "ChatGPT",
         ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
     ai.voice = Mode(voice)
-    ai.speaker = speaker if speaker else ai.speaker
+    if isinstance(speaker, int):
+        ai.speaker = CV(speaker)
+    elif isinstance(speaker, str):
+        ai.speaker = CV[speaker]
     return ai
 
 
 def parse_args() -> argparse.Namespace:
-    """引数解析"""
+    """引数解析
+    return: 引数を解析した結果を格納するargparse.Namespaceオブジェクト
+    - argparseライブラリを使用して、コマンドライン引数の解析を行う。
+    - コマンドライン引数として以下の引数を受け付ける。
+      1. --character, -c : AIキャラクタ指定、デフォルトは"ChatGPT"。
+      2. --voice, -v : AI音声の生成先を指定する。
+          -vを1つ指定するとSLOW、2回指定するとFAST、
+          3回指定するとLOCALになる。デフォルトはNone。
+      3. --speaker, -s : VOICEVOX キャラクターボイスを指定する。
+          strまたはintを指定する。デフォルトは0。
+      4. --yaml, -y : AIカスタム設定YAMLのファイルパスを指定する。デフォルトはNone。
+    - 引数を解析した結果をargparse.Namespaceオブジェクトに格納し、戻り値として返す。
+    """
     parser = argparse.ArgumentParser(description="ChatGPT client")
     parser.add_argument(
         "--character",
@@ -285,7 +299,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--speaker",
         "-s",
-        default=None,
+        default=0,
         help="VOICEVOX キャラクターボイス(str or int, default None)",
     )
     parser.add_argument(
