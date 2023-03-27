@@ -51,7 +51,11 @@ async def spinner():
 
 def get_content(resp_json: dict) -> str:
     """JSONからAIの回答を取得"""
-    return resp_json['choices'][0]['message']['content']
+    try:
+        content = resp_json['choices'][0]['message']['content']
+    except KeyError:
+        raise KeyError(f"キーが見つかりません。{resp_json}")
+    return content
 
 
 def print_one_by_one(text):
@@ -154,6 +158,10 @@ class BaseAI:
             async with session.post(ENDPOINT,
                                     headers=HEADERS,
                                     data=json.dumps(data)) as response:
+                if response.status != 200:
+                    raise ValueError(
+                        f'Error: {response.status}, Message: {response.json()}'
+                    )
                 ai_response = await response.json()
         content = get_content(ai_response)
         self.chat_summary = content

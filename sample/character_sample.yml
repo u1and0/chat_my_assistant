@@ -2,10 +2,12 @@
 # BaseAIクラスに定義してあります。
 #
 # - name: "ChatGPT"
-#   filename: "chatgpt-assistant.txt"
 #   max_tokens : 1000
 #   temperature : 1.0
 #   system_role: "さっきの話の内容を聞かれたら、話をまとめてください。"
+#   filename: "chatgpt-assistant.txt"
+#   voice: Mode.NONE
+#   speaker: CV.ナースロボタイプ楽々
 #
 # カスタムキャラクタを設定してください。
 # https://api.github.com/gists/{gist_id}/character.yml
