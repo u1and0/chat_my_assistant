@@ -110,7 +110,7 @@ class BaseAI:
     """AI base character"""
     name: str = "ChatGPT"
     max_tokens: int = 1000
-    temperature: float = 0.2
+    temperature: float = 1.0
     system_role: str = "さっきの話の内容を聞れたら、話をまとめてください。"
     filename: str = "chatgpt-assistant.txt"
     # 長期記憶

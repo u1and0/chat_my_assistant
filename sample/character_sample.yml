@@ -4,7 +4,7 @@
 # - name: "ChatGPT"
 #   filename: "chatgpt-assistant.txt"
 #   max_tokens : 1000
-#   temperature : 0.2
+#   temperature : 1.0
 #   system_role: "さっきの話の内容を聞かれたら、話をまとめてください。"
 #
 # カスタムキャラクタを設定してください。
