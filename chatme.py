@@ -16,7 +16,6 @@ from itertools import cycle
 import asyncio
 import yaml
 import aiohttp
-from lib.gist_memory import Gist
 from lib.voicevox_character import CV, Mode
 
 # ChatGPT API Key
@@ -114,7 +113,7 @@ class BaseAI:
     system_role: str = "さっきの話の内容を聞れたら、話をまとめてください。"
     filename: str = "chatgpt-assistant.txt"
     # 長期記憶
-    gist: Gist = Gist("")
+    gist: str = ""
     chat_summary: str = ""
     voice: Mode = Mode.NONE
     speaker: str = "ナースロボタイプ楽々"
@@ -244,6 +243,7 @@ def ai_constructor(character: str = "ChatGPT",
         with open(character_file, "r", encoding="utf-8") as yaml_str:
             config = yaml.safe_load(yaml_str)
     else:  # キャラ設定YAMLファイルが指定されなければGist上のキャラ設定を読みに行く
+        from lib.gist_memory import Gist
         gist = Gist(CONFIG_FILE)
         yaml_str = gist.get()
         config = yaml.safe_load(yaml_str)
@@ -257,7 +257,8 @@ def ai_constructor(character: str = "ChatGPT",
     ai = [a for a in ais if a.name == character][-1]
     # コマンドライン引数から設定するキャラの追加設定
     # Load chat history
-    ai.gist = Gist(ai.filename)
+    if not character_file:
+        ai.gist = Gist(ai.filename)
     ai.chat_summary = ai.gist.get()
     ai.voice = Mode(voice)
     ai.speaker = speaker if speaker else ai.speaker
@@ -290,6 +291,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--yaml",
         "-y",
+        default=None,
         help="AIカスタム設定YAMLのファイルパス",
     )
     return parser.parse_args()
