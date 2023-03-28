@@ -134,8 +134,8 @@ class BaseAI:
     gist: str = ""  # 長期記憶
     chat_summary: str = ""  # 会話履歴
     voice: Mode = Mode.NONE  # AI音声の取得先
+    messages_limit: int = 2  # 会話履歴のストック上限数
     speaker: CV = CV.ナースロボタイプ楽々  # AI音声の種類
-    messages_limit: int = 3  # 会話履歴のストック上限数
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -190,13 +190,12 @@ class BaseAI:
     async def generate_json_payload(
             self, chat_history: Optional[list[Message]] = None) -> dict:
         """user_inputを受取り、POSTするJSONペイロードを作成"""
-        message_list = [
-            Message(str(Role.ASSISTANT), self.chat_summary),
-            Message(str(Role.SYSTEM), self.system_role)
-        ]
-        if chat_history:
-            message_list += chat_history
-        messages = [m._asdict() for m in message_list]
+        if not chat_history:
+            chat_history = [
+                Message(str(Role.SYSTEM), self.system_role),
+                Message(str(Role.ASSISTANT), self.chat_summary),
+            ]
+        messages = [h._asdict() for h in chat_history]
         # messages = [{
         #     "role": "system",
         #     "content": self.system_role
@@ -222,6 +221,8 @@ class BaseAI:
             user_input = await wait_for_input(TIMEOUT)
             user_input = user_input.strip().replace("/n", "")
             if user_input in ("q", "exit"):
+                print("\n終了処理: 会話を要約中です。")
+                await self.summarize(*[m.content for m in chat_messages])
                 sys.exit(0)
             # 待っても入力がなければ、再度質問待ち
             if not user_input:
@@ -234,30 +235,36 @@ class BaseAI:
             ai_response: str = await self.post(data)
         except KeyboardInterrupt:
             print()
-            # await self.ask(chat_messages)
+            await self.ask(chat_messages)
         finally:
             spinner_task.cancel()
             # 会話履歴に追加
             chat_messages.append(Message(str(Role.USER), user_input))
             chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
-            self.summarize(m.content for m in chat_messages)
-        # N会話分のlimitを超えると会話を要約して保存
-        if len(chat_messages) > self.messages_limit * 2:
-            # 最初の会話を履歴から削除
+            # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
+            while len(chat_messages) > self.messages_limit * 2:
+                chat_messages.pop(2)  # 0,1番目にはsystem_roleとchut_historyが入っている
+            # 会話の要約をバックグラウンドで進める非同期処理
+            asyncio.create_task(
+                self.summarize(*[m.content for m in chat_messages]))
 
-            chat_messages.pop(0)
-            chat_messages.pop(0)
-            # first_question: Message = chat_messages.pop(0)
-            # first_answer: Message = chat_messages.pop(0)
+        # # N会話分のlimitを超えると会話を要約して保存
+        # if len(chat_messages) > self.messages_limit * 2:
+        #     # 最初の会話を履歴から削除
+        #
+        #     chat_messages.pop(0)
+        #     chat_messages.pop(0)
+        # first_question: Message = chat_messages.pop(0)
+        # first_answer: Message = chat_messages.pop(0)
 
-            # 会話を要約
-            # create_taskして完了を待たずにai_responseをprintする
+        # 会話を要約
+        # create_taskして完了を待たずにai_responseをprintする
 
-            # ここサマライズは必要か？上でやっている
-            # asyncio.create_task(
-            # self.summarize(first_question.content, first_answer.content))
+        # ここサマライズは必要か？上でやっている
+        # asyncio.create_task(
+        # self.summarize(first_question.content, first_answer.content))
 
-            # asyncio.create_task(self.summarize(user_input, ai_response))
+        # asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
         if self.voice > 0:
