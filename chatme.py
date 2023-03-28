@@ -46,6 +46,9 @@ Message = namedtuple("Message", ["role", "content"])
 
 
 class Role(Enum):
+    """messagesオブジェクトのroleキー
+    Usage: str(Role.ASSISTANT) == "assistant"
+    """
     SYSTEM = auto()
     ASSISTANT = auto()
     USER = auto()
@@ -165,7 +168,7 @@ class BaseAI:
             data = {
                 "model": MODEL,
                 "messages": [{
-                    "role": "user",
+                    "role": str(Role.USER),
                     "content": content
                 }],
                 "max_tokens": SUMMARY_TOKENS
@@ -214,6 +217,7 @@ class BaseAI:
 
     async def ask(self, chat_messages: list[Message]):
         """AIへの質問"""
+        print(f"AIの会話履歴: {chat_messages}")
         try:
             user_input = await wait_for_input(TIMEOUT)
             user_input = user_input.strip().replace("/n", "")
@@ -222,6 +226,7 @@ class BaseAI:
             # 待っても入力がなければ、再度質問待ち
             if not user_input:
                 await self.ask(chat_messages)
+            chat_messages.append(Message(str(Role.USER), user_input))
             data = await self.generate_json_payload(chat_messages)
             # 回答を考えてもらう
             # ai_responseが出てくるまで待つ
@@ -229,15 +234,15 @@ class BaseAI:
             ai_response: str = await self.post(data)
         except KeyboardInterrupt:
             print()
-            await self.ask(chat_messages)
+            # await self.ask(chat_messages)
         finally:
             spinner_task.cancel()
             if len(chat_messages) > 0:
                 print("終了時に会話をまとめています...")
                 self.summarize(m.content for m in chat_messages)
         # 会話履歴に追加
-        chat_messages.append(Message("user", user_input))
-        chat_messages.append(Message("assistant", ai_response))
+        chat_messages.append(Message(str(Role.USER), user_input))
+        chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
         # N会話分のlimitを超えると会話を要約して保存
         if len(chat_messages) > self.messages_limit * 2:
             # 最初の会話を履歴から削除
