@@ -148,14 +148,14 @@ class BaseAI:
         content = get_content(ai_response)
         return content
 
-    async def summarize(self, *messages):
+    async def summarize(self, *messages: str):
         """会話の要約
         * これまでの会話履歴
         * ユーザーの質問
         * ChatGPTの回答
         を要約する。
         """
-        concat = "\n".join(*messages)
+        concat = "\n".join(messages)
         content = f"""
         発言者がuserとassistantどちらであるかわかるように、
         下記の会話をリスト形式で、ですます調を使わずに要約してください。
@@ -237,21 +237,26 @@ class BaseAI:
             # await self.ask(chat_messages)
         finally:
             spinner_task.cancel()
-            if len(chat_messages) > 0:
-                print("終了時に会話をまとめています...")
-                self.summarize(m.content for m in chat_messages)
-        # 会話履歴に追加
-        chat_messages.append(Message(str(Role.USER), user_input))
-        chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
+            # 会話履歴に追加
+            chat_messages.append(Message(str(Role.USER), user_input))
+            chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
+            self.summarize(m.content for m in chat_messages)
         # N会話分のlimitを超えると会話を要約して保存
         if len(chat_messages) > self.messages_limit * 2:
             # 最初の会話を履歴から削除
-            first_question: Message = chat_messages.pop(0)
-            first_answer: Message = chat_messages.pop(0)
+
+            chat_messages.pop(0)
+            chat_messages.pop(0)
+            # first_question: Message = chat_messages.pop(0)
+            # first_answer: Message = chat_messages.pop(0)
+
             # 会話を要約
             # create_taskして完了を待たずにai_responseをprintする
-            asyncio.create_task(
-                self.summarize(first_question.content, first_answer.content))
+
+            # ここサマライズは必要か？上でやっている
+            # asyncio.create_task(
+            # self.summarize(first_question.content, first_answer.content))
+
             # asyncio.create_task(self.summarize(user_input, ai_response))
         # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
         # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
