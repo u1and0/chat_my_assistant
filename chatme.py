@@ -190,12 +190,14 @@ class BaseAI:
     async def generate_json_payload(
             self, chat_history: Optional[list[Message]] = None) -> dict:
         """user_inputを受取り、POSTするJSONペイロードを作成"""
-        if not chat_history:
-            chat_history = [
-                Message(str(Role.SYSTEM), self.system_role),
-                Message(str(Role.ASSISTANT), self.chat_summary),
-            ]
-        messages = [h._asdict() for h in chat_history]
+        role_summary_input = [
+            Message(str(Role.SYSTEM), self.system_role),
+            Message(str(Role.ASSISTANT), self.chat_summary),
+        ] + chat_history
+        messages = [h._asdict() for h in role_summary_input]
+        print("---AIの会話履歴---")
+        for message in messages:
+            print(f"{message['role']}: {message['content']}")
         # messages = [{
         #     "role": "system",
         #     "content": self.system_role
@@ -216,13 +218,14 @@ class BaseAI:
 
     async def ask(self, chat_messages: list[Message]):
         """AIへの質問"""
-        print(f"AIの会話履歴: {chat_messages}")
         try:
             user_input = await wait_for_input(TIMEOUT)
             user_input = user_input.strip().replace("/n", "")
             if user_input in ("q", "exit"):
                 print("\n終了処理: 会話を要約中です。")
+                spinner_task = asyncio.create_task(spinner())  # スピナー表示
                 await self.summarize(*[m.content for m in chat_messages])
+                spinner_task.cancel()
                 sys.exit(0)
             # 待っても入力がなければ、再度質問待ち
             if not user_input:
@@ -239,11 +242,10 @@ class BaseAI:
         finally:
             spinner_task.cancel()
             # 会話履歴に追加
-            chat_messages.append(Message(str(Role.USER), user_input))
             chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
             # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
             while len(chat_messages) > self.messages_limit * 2:
-                chat_messages.pop(2)  # 0,1番目にはsystem_roleとchut_historyが入っている
+                chat_messages.pop(0)
             # 会話の要約をバックグラウンドで進める非同期処理
             asyncio.create_task(
                 self.summarize(*[m.content for m in chat_messages]))
