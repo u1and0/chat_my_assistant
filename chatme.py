@@ -195,9 +195,6 @@ class BaseAI:
             Message(str(Role.ASSISTANT), self.chat_summary),
         ] + chat_history
         messages = [h._asdict() for h in role_summary_input]
-        print("---AIの会話履歴---")
-        for message in messages:
-            print(f"{message['role']}: {message['content']}")
         # messages = [{
         #     "role": "system",
         #     "content": self.system_role
