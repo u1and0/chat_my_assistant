@@ -249,26 +249,7 @@ class BaseAI:
             # 会話の要約をバックグラウンドで進める非同期処理
             asyncio.create_task(
                 self.summarize(*[m.content for m in chat_messages]))
-
-        # # N会話分のlimitを超えると会話を要約して保存
-        # if len(chat_messages) > self.messages_limit * 2:
-        #     # 最初の会話を履歴から削除
-        #
-        #     chat_messages.pop(0)
-        #     chat_messages.pop(0)
-        # first_question: Message = chat_messages.pop(0)
-        # first_answer: Message = chat_messages.pop(0)
-
-        # 会話を要約
-        # create_taskして完了を待たずにai_responseをprintする
-
-        # ここサマライズは必要か？上でやっている
-        # asyncio.create_task(
-        # self.summarize(first_question.content, first_answer.content))
-
-        # asyncio.create_task(self.summarize(user_input, ai_response))
-        # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
-        # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
+        # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
             play_voice(ai_response, self.speaker, self.voice)
