@@ -126,6 +126,7 @@ def multi_input() -> str:
 @dataclass
 class BaseAI:
     """AI base character"""
+    # YAMLから設定するオプション
     name: str = "ChatGPT"
     max_tokens: int = 1000
     temperature: float = 1.0
@@ -133,9 +134,11 @@ class BaseAI:
     filename: str = "chatgpt-assistant.txt"
     gist: str = ""  # 長期記憶
     chat_summary: str = ""  # 会話履歴
-    voice: Mode = Mode.NONE  # AI音声の取得先
     messages_limit: int = 2  # 会話履歴のストック上限数
-    speaker: CV = CV.ナースロボタイプ楽々  # AI音声の種類
+    # コマンドラインから設定するオプション
+    voice: Mode = Mode.NONE  # AI音声の取得先
+    # YAML/コマンドラインから設定するオプション
+    speaker = "ナースロボタイプノーマル"  # AI音声の種類
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -267,11 +270,27 @@ class AI(BaseAI):
     filename: str
     voice: str
     messages_limit: int
+    speaker: str
+
+
+def set_speaker(sp):
+    """ AI.speakerの判定
+    コマンドラインからspeakerオプションがintかstrで与えられていたら
+    そのspeakerに変える
+    コマンドラインからオプションを与えられていなかったらNoneが来るので
+    プリセットキャラクターのBaseAI.speakerを付与
+    """
+    if isinstance(sp, int):
+        return CV(sp)
+    elif isinstance(sp, str):
+        return CV[sp]
+    else:
+        return CV[BaseAI.speaker]
 
 
 def ai_constructor(character: str = "ChatGPT",
-                   voice: int = 0,
-                   speaker: Union[int, str] = 0,
+                   voice: Mode = Mode.NONE,
+                   speaker=None,
                    character_file: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
@@ -311,10 +330,7 @@ def ai_constructor(character: str = "ChatGPT",
     # AIの音声生成モードを設定
     ai.voice = Mode(voice)
     # AIの発話用テキスト読み上げキャラクターを設定
-    if isinstance(speaker, int):
-        ai.speaker = CV(speaker)
-    elif isinstance(speaker, str):
-        ai.speaker = CV[speaker]
+    ai.speaker = set_speaker(speaker)
     return ai
 
 
@@ -332,7 +348,10 @@ def parse_args() -> argparse.Namespace:
       4. --yaml, -y : AIカスタム設定YAMLのファイルパスを指定する。デフォルトはNone。
     - 引数を解析した結果をargparse.Namespaceオブジェクトに格納し、戻り値として返す。
     """
-    parser = argparse.ArgumentParser(description="ChatGPT client")
+    cv_list = "\n".join(str(t) for t in CV.items().items())
+    parser = argparse.ArgumentParser(description=f"""ChatGPT client
+
+        speakers: {cv_list}""")
     parser.add_argument(
         "--character",
         "-c",
@@ -350,7 +369,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--speaker",
         "-s",
-        default=0,
+        default=None,
         help="VOICEVOX キャラクターボイス(str or int, default None)",
     )
     parser.add_argument(
@@ -365,7 +384,7 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     ai = ai_constructor(character=args.character,
-                        voice=args.voice,
+                        voice=Mode(args.voice),
                         speaker=args.speaker,
                         character_file=args.yaml)
     # Start chat
