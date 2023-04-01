@@ -138,7 +138,7 @@ class BaseAI:
     # コマンドラインから設定するオプション
     voice: Mode = Mode.NONE  # AI音声の取得先
     # YAML/コマンドラインから設定するオプション
-    speaker = "ナースロボタイプノーマル"  # AI音声の種類
+    speaker = "四国めたんノーマル"  # AI音声の種類
 
     @staticmethod
     async def post(data: dict) -> str:
