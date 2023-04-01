@@ -7,6 +7,8 @@
 import os
 import sys
 import json
+from enum import Enum, auto
+from collections import namedtuple
 from dataclasses import dataclass
 from typing import Optional, Union
 import random
@@ -39,6 +41,20 @@ PROMPT = "あなた: "
 SUMMARY_TOKENS = 2000
 # OpenAI model
 MODEL = "gpt-3.5-turbo"
+# 会話履歴
+Message = namedtuple("Message", ["role", "content"])
+
+
+class Role(Enum):
+    """messagesオブジェクトのroleキー
+    Usage: str(Role.ASSISTANT) == "assistant"
+    """
+    SYSTEM = auto()
+    ASSISTANT = auto()
+    USER = auto()
+
+    def __str__(self):
+        return self.name.lower()
 
 
 async def spinner():
@@ -110,6 +126,7 @@ def multi_input() -> str:
 @dataclass
 class BaseAI:
     """AI base character"""
+    # YAMLから設定するオプション
     name: str = "ChatGPT"
     max_tokens: int = 1000
     temperature: float = 1.0
@@ -117,8 +134,11 @@ class BaseAI:
     filename: str = "chatgpt-assistant.txt"
     gist: str = ""  # 長期記憶
     chat_summary: str = ""  # 会話履歴
+    messages_limit: int = 2  # 会話履歴のストック上限数
+    # コマンドラインから設定するオプション
     voice: Mode = Mode.NONE  # AI音声の取得先
-    speaker: CV = CV.ナースロボタイプ楽々  # AI音声の種類
+    # YAML/コマンドラインから設定するオプション
+    speaker = "四国めたんノーマル"  # AI音声の種類
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -131,26 +151,27 @@ class BaseAI:
         content = get_content(ai_response)
         return content
 
-    async def summarize(self, user_input: str, ai_answer: str):
+    async def summarize(self, *messages: str):
         """会話の要約
         * これまでの会話履歴
         * ユーザーの質問
         * ChatGPTの回答
         を要約する。
         """
+        concat = "\n".join(messages)
         content = f"""
         発言者がuserとassistantどちらであるかわかるように、
         下記の会話をリスト形式で、ですます調を使わずに要約してください。
         要約は必ず2000tokens以内で収まるようにして、
         収まらない場合は重要度が低そうな内容を要約から省いて構いません。
         \n---\n
-        {self.chat_summary}\n{user_input}\n{ai_answer}
+        {self.chat_summary}\n{concat}
         """
         async with aiohttp.ClientSession() as session:
             data = {
                 "model": MODEL,
                 "messages": [{
-                    "role": "user",
+                    "role": str(Role.USER),
                     "content": content
                 }],
                 "max_tokens": SUMMARY_TOKENS
@@ -169,18 +190,24 @@ class BaseAI:
         self.gist.patch(content)
         return content
 
-    async def generate_json_payload(self, user_input: str) -> dict:
+    async def generate_json_payload(
+            self, chat_history: Optional[list[Message]] = None) -> dict:
         """user_inputを受取り、POSTするJSONペイロードを作成"""
-        messages = [{
-            "role": "system",
-            "content": self.system_role
-        }, {
-            "role": "assistant",
-            "content": self.chat_summary
-        }, {
-            "role": "user",
-            "content": user_input
-        }]
+        role_summary_input = [
+            Message(str(Role.SYSTEM), self.system_role),
+            Message(str(Role.ASSISTANT), self.chat_summary),
+        ] + chat_history
+        messages = [h._asdict() for h in role_summary_input]
+        # messages = [{
+        #     "role": "system",
+        #     "content": self.system_role
+        # }, {
+        #     "role": "assistant",
+        #     "content": self.chat_summary
+        # }, {
+        #     "role": "user",
+        #     "content": user_input
+        # }]
         payload = {
             "model": MODEL,
             "temperature": self.temperature,
@@ -189,40 +216,46 @@ class BaseAI:
         }
         return payload
 
-    async def ask(self, user_input: str = ""):
+    async def ask(self, chat_messages: list[Message]):
         """AIへの質問"""
-        if not user_input:
-            # ##BUG
-            # user inputがあるのにawait wait_for_inputが走る
+        try:
             user_input = await wait_for_input(TIMEOUT)
             user_input = user_input.strip().replace("/n", "")
             if user_input in ("q", "exit"):
+                print("\n終了処理: 会話を要約中です。")
+                spinner_task = asyncio.create_task(spinner())  # スピナー表示
+                await self.summarize(*[m.content for m in chat_messages])
+                spinner_task.cancel()
                 sys.exit(0)
             # 待っても入力がなければ、再度質問待ち
             if not user_input:
-                await self.ask()
-        data = await self.generate_json_payload(user_input)
-        # 回答を考えてもらう
-        # ai_responseが出てくるまで待つ
-        spinner_task = asyncio.create_task(spinner())  # スピナー表示
-        try:
+                await self.ask(chat_messages)
+            chat_messages.append(Message(str(Role.USER), user_input))
+            data = await self.generate_json_payload(chat_messages)
+            # 回答を考えてもらう
+            # ai_responseが出てくるまで待つ
+            spinner_task = asyncio.create_task(spinner())  # スピナー表示
             ai_response: str = await self.post(data)
         except KeyboardInterrupt:
             print()
-            await self.ask()
+            await self.ask(chat_messages)
         finally:
             spinner_task.cancel()
-        # 会話を要約
-        # create_taskして完了を待たずにai_responseをprintする
-        asyncio.create_task(self.summarize(user_input, ai_response))
-        # 非同期で飛ばしてゆっくり出力している間に要約の処理を行う
-        # asyncio.create_task(print_one_by_one(f"{self.name}: {ai_response}\n"))
+            # 会話履歴に追加
+            chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
+            # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
+            while len(chat_messages) > self.messages_limit * 2:
+                chat_messages.pop(0)
+            # 会話の要約をバックグラウンドで進める非同期処理
+            asyncio.create_task(
+                self.summarize(*[m.content for m in chat_messages]))
+        # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
             play_voice(ai_response, self.speaker, self.voice)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
-        await self.ask()
+        await self.ask(chat_messages)
 
 
 @dataclass
@@ -236,11 +269,28 @@ class AI(BaseAI):
     system_role: str
     filename: str
     voice: str
+    messages_limit: int
+    speaker: str
+
+
+def set_speaker(sp):
+    """ AI.speakerの判定
+    コマンドラインからspeakerオプションがintかstrで与えられていたら
+    そのspeakerに変える
+    コマンドラインからオプションを与えられていなかったらNoneが来るので
+    プリセットキャラクターのBaseAI.speakerを付与
+    """
+    if isinstance(sp, int):
+        return CV(sp)
+    elif isinstance(sp, str):
+        return CV[sp]
+    else:
+        return CV[BaseAI.speaker]
 
 
 def ai_constructor(character: str = "ChatGPT",
-                   voice: int = 0,
-                   speaker: Union[int, str] = 0,
+                   voice: Mode = Mode.NONE,
+                   speaker=None,
                    character_file: Optional[str] = None) -> Union[AI, BaseAI]:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
@@ -280,10 +330,7 @@ def ai_constructor(character: str = "ChatGPT",
     # AIの音声生成モードを設定
     ai.voice = Mode(voice)
     # AIの発話用テキスト読み上げキャラクターを設定
-    if isinstance(speaker, int):
-        ai.speaker = CV(speaker)
-    elif isinstance(speaker, str):
-        ai.speaker = CV[speaker]
+    ai.speaker = set_speaker(speaker)
     return ai
 
 
@@ -301,7 +348,10 @@ def parse_args() -> argparse.Namespace:
       4. --yaml, -y : AIカスタム設定YAMLのファイルパスを指定する。デフォルトはNone。
     - 引数を解析した結果をargparse.Namespaceオブジェクトに格納し、戻り値として返す。
     """
-    parser = argparse.ArgumentParser(description="ChatGPT client")
+    cv_list = "\n".join(str(t) for t in CV.items().items())
+    parser = argparse.ArgumentParser(description=f"""ChatGPT client
+
+        speakers: {cv_list}""")
     parser.add_argument(
         "--character",
         "-c",
@@ -319,7 +369,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--speaker",
         "-s",
-        default=0,
+        default=None,
         help="VOICEVOX キャラクターボイス(str or int, default None)",
     )
     parser.add_argument(
@@ -334,14 +384,9 @@ def parse_args() -> argparse.Namespace:
 if __name__ == "__main__":
     args = parse_args()
     ai = ai_constructor(character=args.character,
-                        voice=args.voice,
+                        voice=Mode(args.voice),
                         speaker=args.speaker,
                         character_file=args.yaml)
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")
-    # stdinがあるとき、それをquestionに
-    # stdinがないとき、空文字を渡してプロンプトで入力待ち受け
-    question = "" if sys.stdin.isatty() else sys.stdin.read()
-    if question:
-        print(f"{PROMPT}{question}")
-    asyncio.run(ai.ask(question))
+    asyncio.run(ai.ask([]))

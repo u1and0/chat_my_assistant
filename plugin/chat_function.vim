@@ -9,8 +9,8 @@ function! Chat()
     normal! gv"xy
     vs | term python ${PYTHONPATH}/chat_my_assistant/chatme.py -c PRO
     sleep 1  " sleepしないとプロンプトの前に貼り付けられてしまう
-    normal! "xp
-    execute "normal! a"
+    normal! "xpA
+    " execute "normal! a"
 endfunction
 
 vnoremap <leader>c :call Chat()<CR>
