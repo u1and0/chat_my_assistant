@@ -1,3 +1,4 @@
+#!/usr/bin/env python3
 """
 [WEB版VOICEVOX API（高速）](https://voicevox.su-shiki.com/su-shikiapis/)
 [WEB版VOICEVOX API（低速）](https://voicevox.su-shiki.com/su-shikiapis/ttsquest/)

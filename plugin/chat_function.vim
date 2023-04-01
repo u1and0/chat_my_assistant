@@ -7,7 +7,7 @@ function! Chat()
     let @x='' " レジスタ初期化
     " 選択範囲をレジスタxへ格納
     normal! gv"xy
-    vs | term python ${PYTHONPATH}/chat_my_assistant/chatme.py -c PRO
+    vs | term ${PYTHONPATH}/chat_my_assistant/chatme.py -c PRO
     sleep 1  " sleepしないとプロンプトの前に貼り付けられてしまう
     normal! "xpA
     " execute "normal! a"

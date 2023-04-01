@@ -130,7 +130,10 @@ class BaseAI:
     name: str = "ChatGPT"
     max_tokens: int = 1000
     temperature: float = 1.0
-    system_role: str = "さっきの話の内容を聞れたら、話をまとめてください。"
+    system_role: str = """
+    さっきの話の内容を聞かれたときに「憶えていない」や「記憶を持たない」と言った発言をしないでください。\
+    その代わりに、あなたの発言と会話のやり取りを要約して話してください。
+"""
     filename: str = "chatgpt-assistant.txt"
     gist: str = ""  # 長期記憶
     chat_summary: str = ""  # 会話履歴
@@ -189,6 +192,21 @@ class BaseAI:
         # 最後に要約を長期記憶へ保存
         self.gist.patch(content)
         return content
+
+    def set_speaker(self, sp):
+        """ AI.speakerの判定
+        コマンドラインからspeakerオプションがintかstrで与えられていたら
+        そのspeakerに変える
+        コマンドラインからオプションを与えられていなかったらNoneが来るので
+        プリセットキャラクターのBaseAI.speakerを付与
+        """
+        try:
+            speaker_id = int(sp)
+            return CV(speaker_id)
+        except ValueError:  # type(sp) == str
+            return CV[sp]
+        except TypeError:  # sp == None
+            return CV[self.speaker]
 
     async def generate_json_payload(
             self, chat_history: Optional[list[Message]] = None) -> dict:
@@ -273,21 +291,6 @@ class AI(BaseAI):
     speaker: str
 
 
-def set_speaker(sp):
-    """ AI.speakerの判定
-    コマンドラインからspeakerオプションがintかstrで与えられていたら
-    そのspeakerに変える
-    コマンドラインからオプションを与えられていなかったらNoneが来るので
-    プリセットキャラクターのBaseAI.speakerを付与
-    """
-    if isinstance(sp, int):
-        return CV(sp)
-    elif isinstance(sp, str):
-        return CV[sp]
-    else:
-        return CV[BaseAI.speaker]
-
-
 def ai_constructor(character: str = "ChatGPT",
                    voice: Mode = Mode.NONE,
                    speaker=None,
@@ -330,7 +333,8 @@ def ai_constructor(character: str = "ChatGPT",
     # AIの音声生成モードを設定
     ai.voice = Mode(voice)
     # AIの発話用テキスト読み上げキャラクターを設定
-    ai.speaker = set_speaker(speaker)
+    ai.speaker = ai.set_speaker(speaker)
+    print(ai.speaker)
     return ai
 
 
