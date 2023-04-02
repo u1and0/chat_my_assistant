@@ -1,3 +1,6 @@
+"""VOICEVOX setting
+Mode: VOICEVOXの音声生成先の列挙型
+CV: キャラクター音声の列挙型"""
 from enum import IntEnum, auto
 
 
