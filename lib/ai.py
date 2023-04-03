@@ -8,7 +8,6 @@ import sys
 import json
 from enum import Enum, auto
 from collections import namedtuple
-from dataclasses import dataclass
 from typing import Optional, Union
 import random
 from time import sleep
@@ -41,6 +40,11 @@ SUMMARY_TOKENS = 2000
 MODEL = "gpt-3.5-turbo"
 # 会話履歴
 Message = namedtuple("Message", ["role", "content"])
+# デフォルトのsystem_role
+SYSTEM_ROLE = """
+        さっきの話の内容を聞かれたときに「憶えていない」や「記憶を持たない」と言った発言をしないでください。\
+        その代わりに、あなたの発言と会話のやり取りを要約して話してください。
+    """
 
 
 class Role(Enum):
@@ -121,25 +125,34 @@ def multi_input() -> str:
     return line + lines
 
 
-@dataclass
-class BaseAI:
-    """AI base character"""
-    # YAMLから設定するオプション
-    name: str = "ChatGPT"
-    max_tokens: int = 1000
-    temperature: float = 1.0
-    system_role: str = """
-    さっきの話の内容を聞かれたときに「憶えていない」や「記憶を持たない」と言った発言をしないでください。\
-    その代わりに、あなたの発言と会話のやり取りを要約して話してください。
-"""
-    filename: str = "chatgpt-assistant.txt"
-    gist: str = ""  # 長期記憶
-    chat_summary: str = ""  # 会話履歴
-    messages_limit: int = 2  # 会話履歴のストック上限数
-    # コマンドラインから設定するオプション
-    voice: Mode = Mode.NONE  # AI音声の取得先
-    # YAML/コマンドラインから設定するオプション
-    speaker = "四国めたんノーマル"  # AI音声の種類
+class AI:
+    """AI modified character
+    yamlから読み込んだキャラクタ設定
+    """
+    def __init__(self,
+                 name="ChatGPT",
+                 max_tokens=1000,
+                 temperature=1.0,
+                 system_role=SYSTEM_ROLE,
+                 filename="chatgpt-assistant.txt",
+                 gist=None,
+                 chat_summary="",
+                 messages_limit=2,
+                 voice: Mode = Mode.NONE,
+                 speaker: CV = CV.四国めたんノーマル):
+        # YAMLから設定するオプション
+        self.name = name
+        self.max_tokens = max_tokens
+        self.temperature = temperature
+        self.system_role = SYSTEM_ROLE
+        self.filename = filename
+        self.gist = gist  # 長期記憶
+        self.chat_summary = chat_summary  # 会話履歴
+        self.messages_limit = messages_limit  # 会話履歴のストック上限数
+        # コマンドラインから設定するオプション
+        self.voice: Mode = voice  # AI音声の取得先
+        # YAML/コマンドラインから設定するオプション
+        self.speaker = speaker  # AI音声の種類
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -196,7 +209,7 @@ class BaseAI:
         コマンドラインからspeakerオプションがintかstrで与えられていたら
         そのspeakerに変える
         コマンドラインからオプションを与えられていなかったらNoneが来るので
-        プリセットキャラクターのBaseAI.speakerを付与
+        プリセットキャラクターのAI.speakerを付与
         """
         try:
             speaker_id = int(sp)
@@ -204,7 +217,7 @@ class BaseAI:
         except ValueError:  # type(sp) == str
             return CV[sp]
         except TypeError:  # sp == None
-            return CV[self.speaker]
+            return self.speaker
 
     async def generate_json_payload(
             self, chat_history: Optional[list[Message]] = None) -> dict:
@@ -274,25 +287,10 @@ class BaseAI:
         await self.ask(chat_messages)
 
 
-@dataclass
-class AI(BaseAI):
-    """AI modified character
-    yamlから読み込んだキャラクタ設定
-    """
-    name: str
-    max_tokens: int
-    temperature: float
-    system_role: str
-    filename: str
-    voice: str
-    messages_limit: int
-    speaker: str
-
-
 def ai_constructor(character: str = "ChatGPT",
                    voice: Mode = Mode.NONE,
                    speaker=None,
-                   character_file: Optional[str] = None) -> Union[AI, BaseAI]:
+                   character_file: Optional[str] = None) -> Union[AI]:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
     Args:
@@ -315,9 +313,8 @@ def ai_constructor(character: str = "ChatGPT",
     if config is None:
         raise ValueError("キャラクター設定ファイルが存在しません。")
 
-    # YAMLファイルから読んだカスタムAIのリストとBaseAI
-    ais = [AI(**c) for c in config]
-    ais.insert(0, BaseAI())
+    # YAMLファイルから読んだカスタムAIのリストとデフォルトのAI
+    ais = [AI()] + [AI(**c) for c in config]
 
     # character引数で指定されたnameのAIを選択
     #  同名があったらYAMLファイルの下の行にあるものを優先する。
