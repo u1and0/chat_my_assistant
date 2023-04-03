@@ -40,10 +40,11 @@ SUMMARY_TOKENS = 2000
 MODEL = "gpt-3.5-turbo"
 # 会話履歴
 Message = namedtuple("Message", ["role", "content"])
-# デフォルトのsystem_role
+# デフォルトの役割プロンプト
 SYSTEM_ROLE = """
-        さっきの話の内容を聞かれたときに「憶えていない」や「記憶を持たない」と言った発言をしないでください。\
-        その代わりに、あなたの発言と会話のやり取りを要約して話してください。
+        さっきの話の内容を聞かれたときに\
+        「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
+        あなたの発言と会話のやり取りを要約して話してください。\
     """
 
 
@@ -138,7 +139,7 @@ class AI:
                  gist=None,
                  chat_summary="",
                  messages_limit=2,
-                 voice: Mode = Mode.NONE,
+                 voice: Union[Mode, str] = Mode.NONE,
                  speaker: CV = CV.四国めたんノーマル):
         # YAMLから設定するオプション
         self.name = name
@@ -149,10 +150,10 @@ class AI:
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
         self.messages_limit = messages_limit  # 会話履歴のストック上限数
-        # コマンドラインから設定するオプション
-        self.voice: Mode = voice  # AI音声の取得先
-        # YAML/コマンドラインから設定するオプション
-        self.speaker = speaker  # AI音声の種類
+        # AIの音声生成モードを設定
+        self.voice = Mode(voice)
+        # AIの発話用テキスト読み上げキャラクターを設定
+        self.speaker = self.set_speaker(speaker)
 
     @staticmethod
     async def post(data: dict) -> str:
@@ -287,10 +288,10 @@ class AI:
         await self.ask(chat_messages)
 
 
-def ai_constructor(character: str = "ChatGPT",
-                   voice: Mode = Mode.NONE,
-                   speaker=None,
-                   character_file: Optional[str] = None) -> Union[AI]:
+def create_ai(name: str = "ChatGPT",
+              voice: Mode = Mode.NONE,
+              speaker=None,
+              character_file: Optional[str] = None) -> AI:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
     Args:
@@ -316,17 +317,13 @@ def ai_constructor(character: str = "ChatGPT",
     # YAMLファイルから読んだカスタムAIのリストとデフォルトのAI
     ais = [AI()] + [AI(**c) for c in config]
 
-    # character引数で指定されたnameのAIを選択
+    # name引数で指定されたnameのAIを選択
     #  同名があったらYAMLファイルの下の行にあるものを優先する。
-    ai = [a for a in ais if a.name == character][-1]
+    ai = [a for a in ais if a.name == name][-1]
 
     # コマンドライン引数から設定を適用
     if not character_file:
         # 会話履歴を読み込む
         ai.gist = Gist(ai.filename)
         ai.chat_summary = ai.gist.get()
-    # AIの音声生成モードを設定
-    ai.voice = Mode(voice)
-    # AIの発話用テキスト読み上げキャラクターを設定
-    ai.speaker = ai.set_speaker(speaker)
     return ai

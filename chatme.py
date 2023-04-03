@@ -2,7 +2,7 @@
 """chatgptに複数回の質問と回答 CLI"""
 import argparse
 import asyncio
-from lib.ai import ai_constructor
+from lib.ai import create_ai
 from lib.voicevox_character import CV, Mode
 
 
@@ -55,10 +55,10 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    ai = ai_constructor(character=args.character,
-                        voice=Mode(args.voice),
-                        speaker=args.speaker,
-                        character_file=args.yaml)
+    ai = create_ai(name=args.character,
+                   voice=Mode(args.voice),
+                   speaker=args.speaker,
+                   character_file=args.yaml)
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")
     asyncio.run(ai.ask([]))

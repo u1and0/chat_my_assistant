@@ -4,13 +4,15 @@
 " source chat_function.vim
 " :'<,'>call Chat()
 function! Chat()
-    let @x='' " レジスタ初期化
+    " 改行を勝手に挿入しない
+    set paste
     " 選択範囲をレジスタxへ格納
     normal! gv"xy
     vs | term python3 ${PYTHONPATH}/chat_my_assistant/chatme.py -c PRO
     sleep 1  " sleepしないとプロンプトの前に貼り付けられてしまう
     normal! "xpA
     " execute "normal! a"
+    set nopaste
 endfunction
 
 vnoremap <leader>c :call Chat()<CR>
