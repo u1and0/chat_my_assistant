@@ -150,8 +150,6 @@ class AI:
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
         self.messages_limit = messages_limit  # 会話履歴のストック上限数
-        # AIの音声生成モードを設定
-        self.voice = Mode(voice)
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
@@ -288,10 +286,10 @@ class AI:
         await self.ask(chat_messages)
 
 
-def create_ai(name: str = "ChatGPT",
-              voice: Mode = Mode.NONE,
-              speaker=None,
-              character_file: Optional[str] = None) -> AI:
+def ai_constructor(name: str = "ChatGPT",
+                   voice: Mode = Mode.NONE,
+                   speaker=None,
+                   character_file: Optional[str] = None) -> AI:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
     Args:
@@ -326,4 +324,6 @@ def create_ai(name: str = "ChatGPT",
         # 会話履歴を読み込む
         ai.gist = Gist(ai.filename)
         ai.chat_summary = ai.gist.get()
+    # AIの音声生成モードを設定
+    ai.voice = voice
     return ai
