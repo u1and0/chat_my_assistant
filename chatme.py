@@ -2,8 +2,7 @@
 """chatgptに複数回の質問と回答 CLI"""
 import argparse
 import asyncio
-from lib.ai import ai_constructor
-from lib.voicevox_character import CV, Mode
+from lib import ai_constructor,CV, Mode
 
 
 def parse_args() -> argparse.Namespace:
