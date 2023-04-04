@@ -202,18 +202,19 @@ class AI:
 
     async def ask(self, chat_messages: list[Message]):
         """AIへの質問"""
-        try:
-            user_input = await wait_for_input(TIMEOUT)
-            user_input = user_input.replace("/n", " ")
-            if user_input.strip() in ("q", "exit"):
-                sys.exit(0)
-            if not user_input:  # 待っても入力がなければ、再度質問待ち
-                raise ValueError
-            chat_messages.append(Message(str(Role.USER), user_input))
-        except (KeyboardInterrupt, ValueError):
-            print()
-            await self.ask(chat_messages)
-
+        while True:  # 入力待受
+            try:
+                user_input = await wait_for_input(TIMEOUT)
+                user_input = user_input.replace("/n", " ")
+                if user_input.strip() in ("q", "exit"):
+                    raise SystemExit
+                # 待っても入力がなければ、再度質問待ち
+                # 入力があればループを抜け回答を考えてもらう
+                if user_input.strip() != "":
+                    chat_messages.append(Message(str(Role.USER), user_input))
+                    break
+            except KeyboardInterrupt:
+                print()
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
