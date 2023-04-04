@@ -8,7 +8,7 @@ import sys
 import json
 from enum import Enum, auto
 from collections import namedtuple
-from typing import Optional, Union
+from typing import Optional
 import random
 from time import sleep
 from itertools import cycle
@@ -34,18 +34,10 @@ TIMEOUT = 300
 CONFIG_FILE = "character.yml"
 # 質問待受で表示されるプロンプト
 PROMPT = "あなた: "
-# 要約文の最大トークン数
-SUMMARY_TOKENS = 2000
 # OpenAI model
 MODEL = "gpt-3.5-turbo"
 # 会話履歴
 Message = namedtuple("Message", ["role", "content"])
-# デフォルトの役割プロンプト
-SYSTEM_ROLE = """
-        さっきの話の内容を聞かれたときに\
-        「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
-        あなたの発言と会話のやり取りを要約して話してください。\
-    """
 
 
 class Role(Enum):
@@ -134,73 +126,55 @@ class AI:
                  name="ChatGPT",
                  max_tokens=1000,
                  temperature=1.0,
-                 system_role=SYSTEM_ROLE,
+                 system_role=None,
                  filename="chatgpt-assistant.txt",
                  gist=None,
                  chat_summary="",
                  messages_limit: int = 2,
-                 voice: Union[Mode, str] = Mode.NONE,
+                 voice: Mode = Mode.NONE,
                  speaker: CV = CV.四国めたんノーマル):
         # YAMLから設定するオプション
         self.name = name
         self.max_tokens = max_tokens
         self.temperature = temperature
-        self.system_role = SYSTEM_ROLE
+        if not system_role:
+            # デフォルトの役割プロンプト
+            system_role = """
+                    さっきの話の内容を聞かれたときに\
+                    「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
+                    あなたの発言と会話のやり取りを要約して話してください。\
+                """
+        self.system_role = system_role
         self.filename = filename
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
         self.messages_limit = int(messages_limit)  # 会話履歴のストック上限数
+        self.voice = voice
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
-    @staticmethod
-    async def post(data: dict) -> str:
-        """POST question to ChatGPT API"""
+    async def post(self, chat_messages: list[Message]) -> str:
+        """ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す"""
+        messages = [{
+            "role": str(Role.SYSTEM),
+            "content": self.system_role
+        }, {
+            "role": str(Role.ASSISTANT),
+            "content": self.chat_summary
+        }]
+        messages += [h._asdict() for h in chat_messages]  # 会話のやり取り
+        data = {
+            "model": MODEL,
+            "max_tokens": self.max_tokens,
+            "temperature": self.temperature,
+            "messages": messages
+        }
         async with aiohttp.ClientSession() as session:
             async with session.post(ENDPOINT,
                                     headers=HEADERS,
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
         content = get_content(ai_response)
-        return content
-
-    async def summarize(self, *messages: str):
-        """会話の要約
-        * これまでの会話履歴
-        * ユーザーの質問
-        * ChatGPTの回答
-        を要約する。
-        """
-        concat = "\n".join(messages)
-        content = f"""
-        発言者がuserとassistantどちらであるかわかるように、
-        下記の会話をリスト形式で、ですます調を使わずに要約してください。
-        要約は必ず2000tokens以内で収まるようにして、
-        収まらない場合は重要度が低そうな内容を要約から省いて構いません。
-        \n---\n
-        {self.chat_summary}\n{concat}
-        """
-        async with aiohttp.ClientSession() as session:
-            data = {
-                "model": MODEL,
-                "messages": [{
-                    "role": str(Role.USER),
-                    "content": content
-                }],
-                "max_tokens": SUMMARY_TOKENS
-            }
-            async with session.post(ENDPOINT,
-                                    headers=HEADERS,
-                                    data=json.dumps(data)) as response:
-                if response.status != 200:
-                    raise ValueError(
-                        f'Error: {response.status}, Message: {response.json()}'
-                    )
-                ai_response = await response.json()
-        content = get_content(ai_response)
-        self.chat_summary = content
-        # 最後に要約を長期記憶へ保存
-        self.gist.patch(content)
         return content
 
     def set_speaker(self, sp):
@@ -218,31 +192,13 @@ class AI:
         except TypeError:  # sp == None
             return self.speaker
 
-    async def generate_json_payload(
-            self, chat_history: Optional[list[Message]] = None) -> dict:
-        """user_inputを受取り、POSTするJSONペイロードを作成"""
-        role_summary_input = [
-            Message(str(Role.SYSTEM), self.system_role),
-            Message(str(Role.ASSISTANT), self.chat_summary),
-        ] + chat_history
-        messages = [h._asdict() for h in role_summary_input]
-        # messages = [{
-        #     "role": "system",
-        #     "content": self.system_role
-        # }, {
-        #     "role": "assistant",
-        #     "content": self.chat_summary
-        # }, {
-        #     "role": "user",
-        #     "content": user_input
-        # }]
-        payload = {
-            "model": MODEL,
-            "temperature": self.temperature,
-            "max_tokens": self.max_tokens,
-            "messages": messages
-        }
-        return payload
+    async def summarize(self, chat_messages: list[Message]):
+        """要約用のChatGPT: Summarizerを呼び出して要約文を作成し、
+        要約文をgistへアップロードする。
+        """
+        summarizer = Summarizer(self.chat_summary)
+        self.chat_summary = await summarizer.post(chat_messages)
+        self.gist.patch(self.chat_summary)
 
     async def ask(self, chat_messages: list[Message]):
         """AIへの質問"""
@@ -252,18 +208,19 @@ class AI:
             if user_input in ("q", "exit"):
                 print("\n終了処理: 会話を要約中です。")
                 spinner_task = asyncio.create_task(spinner())  # スピナー表示
-                await self.summarize(*[m.content for m in chat_messages])
+                summarizer = Summarizer(self.chat_summary)
+                end_summary = await summarizer.post(chat_messages)
+                self.gist.patch(end_summary)
                 spinner_task.cancel()
                 sys.exit(0)
             # 待っても入力がなければ、再度質問待ち
             if not user_input:
                 await self.ask(chat_messages)
             chat_messages.append(Message(str(Role.USER), user_input))
-            data = await self.generate_json_payload(chat_messages)
             # 回答を考えてもらう
             # ai_responseが出てくるまで待つ
             spinner_task = asyncio.create_task(spinner())  # スピナー表示
-            ai_response: str = await self.post(data)
+            ai_response: str = await self.post(chat_messages)
         except KeyboardInterrupt:
             print()
             await self.ask(chat_messages)
@@ -272,11 +229,11 @@ class AI:
             # 会話履歴に追加
             chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
             # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
+            # 2倍するのはUserの質問とAssistantと回答で1セットだから。
             while len(chat_messages) > self.messages_limit * 2:
                 chat_messages.pop(0)
             # 会話の要約をバックグラウンドで進める非同期処理
-            asyncio.create_task(
-                self.summarize(*[m.content for m in chat_messages]))
+            asyncio.create_task(self.summarize(chat_messages))
         # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
@@ -284,6 +241,56 @@ class AI:
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask(chat_messages)
+
+
+class Summarizer(AI):
+    def __init__(
+        self,
+        chat_summary: str,
+        name="Summarizer",
+        max_tokens=2000,
+        temperature=0,
+    ):
+        super().__init__()
+        self.chat_summary = chat_summary
+        self.temperature = temperature
+        self.system_role = """
+        発言者がuserとassistantどちらであるかわかるように、
+        下記の会話をリスト形式で、ですます調を使わずにである調で要約してください。
+        要約は必ず2000tokens以内で収まるようにして、
+        収まらない場合は重要度が低そうな内容を要約から省いて構いません。
+        """
+
+    async def post(self, messages: list[Message]) -> str:
+        """会話履歴と会話の内容を送信して会話の要約を作る"""
+        content = "\n".join([self.chat_summary] +
+                            [f"- {m.role}: {m.content}" for m in messages])
+        data = {
+            "model":
+            MODEL,
+            "max_tokens":
+            self.max_tokens,
+            "temperature":
+            self.temperature,
+            "messages": [{
+                "role": str(Role.SYSTEM),
+                "content": self.system_role
+            }, {
+                "role": str(Role.USER),
+                "content": content
+            }]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(ENDPOINT,
+                                    headers=HEADERS,
+                                    data=json.dumps(data)) as response:
+                if response.status != 200:
+                    raise ValueError(
+                        f'Error: {response.status}, Message: {response.json()}'
+                    )
+                ai_response = await response.json()
+        content = get_content(ai_response)
+        return content
 
 
 def ai_constructor(name: str = "ChatGPT",
@@ -325,5 +332,7 @@ def ai_constructor(name: str = "ChatGPT",
         ai.gist = Gist(ai.filename)
         ai.chat_summary = ai.gist.get()
     # AIの音声生成モードを設定
+    if isinstance(voice, int):
+        voice = Mode(voice)
     ai.voice = voice
     return ai
