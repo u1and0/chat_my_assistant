@@ -204,36 +204,29 @@ class AI:
         """AIへの質問"""
         try:
             user_input = await wait_for_input(TIMEOUT)
-            user_input = user_input.strip().replace("/n", "")
-            if user_input in ("q", "exit"):
-                print("\n終了処理: 会話を要約中です。")
-                spinner_task = asyncio.create_task(spinner())  # スピナー表示
-                summarizer = Summarizer(self.chat_summary)
-                end_summary = await summarizer.post(chat_messages)
-                self.gist.patch(end_summary)
-                spinner_task.cancel()
+            user_input = user_input.replace("/n", " ")
+            if user_input.strip() in ("q", "exit"):
                 sys.exit(0)
-            # 待っても入力がなければ、再度質問待ち
-            if not user_input:
-                await self.ask(chat_messages)
+            if not user_input:  # 待っても入力がなければ、再度質問待ち
+                raise ValueError
             chat_messages.append(Message(str(Role.USER), user_input))
-            # 回答を考えてもらう
-            # ai_responseが出てくるまで待つ
-            spinner_task = asyncio.create_task(spinner())  # スピナー表示
-            ai_response: str = await self.post(chat_messages)
-        except KeyboardInterrupt:
+        except (KeyboardInterrupt, ValueError):
             print()
             await self.ask(chat_messages)
-        finally:
-            spinner_task.cancel()
-            # 会話履歴に追加
-            chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
-            # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
-            # 2倍するのはUserの質問とAssistantと回答で1セットだから。
-            while len(chat_messages) > self.messages_limit * 2:
-                chat_messages.pop(0)
-            # 会話の要約をバックグラウンドで進める非同期処理
-            asyncio.create_task(self.summarize(chat_messages))
+
+        # 回答を考えてもらう
+        spinner_task = asyncio.create_task(spinner())  # スピナー表示
+        # ai_responseが出てくるまで待つ
+        ai_response: str = await self.post(chat_messages)
+        spinner_task.cancel()
+        # 会話履歴に追加
+        chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
+        # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
+        # 2倍するのはUserの質問とAssistantと回答で1セットだから。
+        while len(chat_messages) > self.messages_limit * 2:
+            chat_messages.pop(0)
+        # 会話の要約をバックグラウンドで進める非同期処理
+        asyncio.create_task(self.summarize(chat_messages))
         # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
