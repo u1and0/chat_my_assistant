@@ -16,7 +16,7 @@ This is a command-line interface (CLI) client for ChatGPT, which allows you to h
 * Optional character role-play mode
 * Optional voice response feature to ChatGPT's replies
 
-<iframe width="560" height="315" src="https://www.youtube.com/embed/KWh5uhvWWgQ" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" allowfullscreen></iframe>
+[![chat_my_assistant hello world](https://user-images.githubusercontent.com/16408916/229843758-86d7a411-0528-4ff6-85e8-aebb3097526f.png)](https://www.youtube.com/embed/KWh5uhvWWgQ)
 
 
 # Usage
@@ -40,8 +40,12 @@ optional arguments:
 
 
 # Installation
-Clone the repository to your local machine.
-Install the necessary dependencies using pip install -r requirements.txt.
+
+```
+$ git clone https://github.com/u1and0/chat_my_assistant
+$ cd chat_my_assistant
+$ pip install -r requirements.txt
+```
 
 # Requirements
 
@@ -53,7 +57,7 @@ Install the necessary dependencies using pip install -r requirements.txt.
 # Optional
 
 * Git(Gist) API key
-* VOICEVOX
+* Install VOICEVOX
 * VOICEVOX API key
 
 
@@ -61,4 +65,4 @@ see more [ChatGPTに人格と記憶と声を持たせて話し相手になって
 
 
 # LICENCE
-This project is licensed under the MIT License. See the LICENSE file for more details.
+This project is licensed under the MIT License. See the [LICENSE](https://raw.githubusercontent.com/u1and0/chat_my_assistant/main/LICENSE) file for more details.
