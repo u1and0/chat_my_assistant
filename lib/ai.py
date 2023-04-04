@@ -138,7 +138,7 @@ class AI:
                  filename="chatgpt-assistant.txt",
                  gist=None,
                  chat_summary="",
-                 messages_limit=2,
+                 messages_limit: int = 2,
                  voice: Union[Mode, str] = Mode.NONE,
                  speaker: CV = CV.四国めたんノーマル):
         # YAMLから設定するオプション
@@ -149,7 +149,7 @@ class AI:
         self.filename = filename
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
-        self.messages_limit = messages_limit  # 会話履歴のストック上限数
+        self.messages_limit = int(messages_limit)  # 会話履歴のストック上限数
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
