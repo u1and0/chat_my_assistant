@@ -143,6 +143,7 @@ class AI:
                     さっきの話の内容を聞かれたときに\
                     「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
                     あなたの発言と会話のやり取りを要約して話してください。\
+                    以下に与えるユーザーの好みを会話の流れで使えたら活用してください。\
                 """
         self.system_role = system_role
         self.filename = filename
@@ -155,9 +156,15 @@ class AI:
 
     async def post(self, chat_messages: list[Message]) -> str:
         """ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す"""
+        if self.gist is not None:
+            from .gist_memory import Gist
+            profiling_gist = Gist(Profiler.filename)
+        # else:
+        # ローカルのユーザープロファイルを読み込む
+        user_profile = profiling_gist.get()
         messages = [{
             "role": str(Role.SYSTEM),
-            "content": self.system_role
+            "content": self.system_role + user_profile
         }, {
             "role": str(Role.ASSISTANT),
             "content": self.chat_summary
