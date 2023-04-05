@@ -196,9 +196,13 @@ class AI:
         """要約用のChatGPT: Summarizerを呼び出して要約文を作成し、
         要約文をgistへアップロードする。
         """
-        summarizer = Summarizer(self.chat_summary)
+        summarizer = Summarizer(self.name, self.filename, self.gist,
+                                self.chat_summary)
+        # 要約文を作成
         self.chat_summary = await summarizer.post(chat_messages)
+        # 要約文をGistへ保存
         self.gist.patch(self.chat_summary)
+        del summarizer
 
     async def ask(self, chat_messages: list[Message]):
         """AIへの質問"""
@@ -238,37 +242,53 @@ class AI:
 
 
 class Summarizer(AI):
-    def __init__(
-        self,
-        chat_summary: str,
-        name="Summarizer",
-        max_tokens=2000,
-        temperature=0,
-    ):
-        super().__init__()
-        self.chat_summary = chat_summary
-        self.temperature = temperature
-        self.system_role = """
-        発言者がuserとassistantどちらであるかわかるように、
-        下記の会話をリスト形式で、ですます調を使わずにである調で要約してください。
-        要約は必ず2000tokens以内で収まるようにして、
-        収まらない場合は重要度が低そうな内容を要約から省いて構いません。
+    """要約文を考えるためのChatGPTインスタンス"""
+    # Summarizerでは下記プロパティは固定値として扱う
+    max_tokens = 2000
+    temperature = 0
+    system_role = """
+    発言者がuserとassistantどちらであるかわかるように、
+    下記の会話をリスト形式で、ですます調を使わずにである調で要約してください。
+    要約は必ず2000tokens以内で収まるようにして、
+    収まらない場合は重要度が低そうな内容を要約から省いて構いません。
+    """
+
+    def __init__(self, name, filename, gist, chat_summary):
         """
+        * 親クラスから引き継がれるプロパティ
+            * `name`
+            * `filename`
+            * `gist`
+            * `chat_summary`
+        * 子クラスで定義された定数を使用
+            * `max_tokens`
+            * `temperature`
+            * `system_role`
+        """
+        super().__init__(name=name,
+                         max_tokens=Summarizer.max_tokens,
+                         temperature=Summarizer.temperature,
+                         system_role=Summarizer.system_role,
+                         filename=filename,
+                         gist=gist,
+                         chat_summary=chat_summary)
 
     async def post(self, messages: list[Message]) -> str:
         """会話履歴と会話の内容を送信して会話の要約を作る"""
-        content = "\n".join([self.chat_summary] +
-                            [f"- {m.role}: {m.content}" for m in messages])
+        content = "\n".join([self.chat_summary] + [
+            f"- {self.name}: {m.content}" if m.role ==
+            Role.ASSISTANT else f"- User: {m.content}" for m in messages
+        ])
         data = {
             "model":
             MODEL,
             "max_tokens":
-            self.max_tokens,
+            Summarizer.max_tokens,
             "temperature":
-            self.temperature,
+            Summarizer.temperature,
             "messages": [{
                 "role": str(Role.SYSTEM),
-                "content": self.system_role
+                "content": Summarizer.system_role
             }, {
                 "role": str(Role.USER),
                 "content": content
