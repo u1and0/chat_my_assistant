@@ -16,6 +16,7 @@ import json
 from typing import Union
 from time import sleep
 import argparse
+import wave
 import requests
 from pydub import AudioSegment
 from pydub.playback import play
@@ -81,6 +82,17 @@ def get_voice(text,
     return response
 
 
+def is_wav_file(filename):
+    """ ファイルがWAVフォーマットであるかどうかを判定する """
+    try:
+        with wave.open(filename, 'r') as f:
+            if f.getnchannels() > 0:
+                return True
+            return False
+    except wave.Error:
+        return False
+
+
 def build_audio(binary, wav_file=None):
     """audioバイナリを作成
     ファイルパス wav_fileが渡されたらそのファイルにwavを保存する。
@@ -90,6 +102,8 @@ def build_audio(binary, wav_file=None):
             f.write(binary)
     else:
         wav_file = BytesIO(binary)
+    if not is_wav_file(wav_file):
+        raise wave.Error("ファイル形式がwavではありません")
     return AudioSegment.from_wav(wav_file)
 
 

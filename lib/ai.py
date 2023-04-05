@@ -13,6 +13,7 @@ import random
 from time import sleep
 from itertools import cycle
 import asyncio
+import wave
 import yaml
 import aiohttp
 from .voicevox_character import CV, Mode
@@ -36,7 +37,7 @@ CONFIG_FILE = "character.yml"
 PROMPT = "あなた: "
 # OpenAI model
 MODEL = "gpt-3.5-turbo"
-# 会話履歴
+# 会話履歴の形式
 Message = namedtuple("Message", ["role", "content"])
 
 
@@ -122,11 +123,20 @@ class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
     """
+    default_system_role = """
+        さっきの話の内容を聞かれたときに\
+        「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
+        あなたの発言と会話のやり取りを要約して話してください。\
+        以下に与えるユーザーの好みを会話の流れで必要に応じて活用してください。\
+
+        # ユーザーの好み\
+        """
+
     def __init__(self,
                  name="ChatGPT",
                  max_tokens=1000,
                  temperature=1.0,
-                 system_role=None,
+                 system_role="",
                  filename="chatgpt-assistant.txt",
                  gist=None,
                  chat_summary="",
@@ -137,15 +147,7 @@ class AI:
         self.name = name
         self.max_tokens = max_tokens
         self.temperature = temperature
-        if not system_role:
-            # デフォルトの役割プロンプト
-            system_role = """
-                    さっきの話の内容を聞かれたときに\
-                    「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
-                    あなたの発言と会話のやり取りを要約して話してください。\
-                    以下に与えるユーザーの好みを会話の流れで使えたら活用してください。\
-                """
-        self.system_role = system_role
+        self.system_role = system_role + AI.default_system_role
         self.filename = filename
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
@@ -161,6 +163,8 @@ class AI:
             profiling_gist = Gist(Profiler.filename)
         # else:
         # ローカルのユーザープロファイルを読み込む
+        # ユーザーが質問するたびにユーザープロファイリングの結果が変わるので、
+        # POSTするたびにユーザープロファイリングの取得処理が必要
         user_profile = profiling_gist.get()
         messages = [{
             "role": str(Role.SYSTEM),
@@ -259,7 +263,12 @@ class AI:
         # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
-            play_voice(ai_response, self.speaker, self.voice)
+            try:
+                play_voice(ai_response, self.speaker, self.voice)
+            except (EOFError, wave.Error) as wav_e:
+                print(f"""Error: 音声再生中にエラーが発生しました。
+                {wav_e}無視してテキストを表示します。
+                """)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask(chat_messages)
