@@ -13,6 +13,7 @@ import random
 from time import sleep
 from itertools import cycle
 import asyncio
+import wave
 import yaml
 import aiohttp
 from .voicevox_character import CV, Mode
@@ -36,7 +37,7 @@ CONFIG_FILE = "character.yml"
 PROMPT = "あなた: "
 # OpenAI model
 MODEL = "gpt-3.5-turbo"
-# 会話履歴
+# 会話履歴の形式
 Message = namedtuple("Message", ["role", "content"])
 
 
@@ -122,11 +123,20 @@ class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
     """
+    default_system_role = """
+        さっきの話の内容を聞かれたときに\
+        「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
+        あなたの発言と会話のやり取りを要約して話してください。\
+        以下に与えるユーザーの好みを会話の流れで必要に応じて活用してください。\
+
+        # ユーザーの好み\
+        """
+
     def __init__(self,
                  name="ChatGPT",
                  max_tokens=1000,
                  temperature=1.0,
-                 system_role=None,
+                 system_role="",
                  filename="chatgpt-assistant.txt",
                  gist=None,
                  chat_summary="",
@@ -137,14 +147,7 @@ class AI:
         self.name = name
         self.max_tokens = max_tokens
         self.temperature = temperature
-        if not system_role:
-            # デフォルトの役割プロンプト
-            system_role = """
-                    さっきの話の内容を聞かれたときに\
-                    「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
-                    あなたの発言と会話のやり取りを要約して話してください。\
-                """
-        self.system_role = system_role
+        self.system_role = system_role + AI.default_system_role
         self.filename = filename
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
@@ -155,9 +158,17 @@ class AI:
 
     async def post(self, chat_messages: list[Message]) -> str:
         """ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す"""
+        if self.gist is not None:
+            from .gist_memory import Gist
+            profiling_gist = Gist(Profiler.filename)
+        # else:
+        # ローカルのユーザープロファイルを読み込む
+        # ユーザーが質問するたびにユーザープロファイリングの結果が変わるので、
+        # POSTするたびにユーザープロファイリングの取得処理が必要
+        user_profile = profiling_gist.get()
         messages = [{
             "role": str(Role.SYSTEM),
-            "content": self.system_role
+            "content": self.system_role + user_profile
         }, {
             "role": str(Role.ASSISTANT),
             "content": self.chat_summary
@@ -204,6 +215,21 @@ class AI:
         self.gist.patch(self.chat_summary)
         del summarizer
 
+    async def profiling(self, user_input: str):
+        """ユーザーのプロファイリング分析用の
+        ChatGPT: Profilerを呼び出してユーザープロファイリングを実行し、
+        ユーザープロファイリングをgistへアップロードする。
+        """
+        profiler = Profiler(self.gist)
+        # ユーザープロファイリングを作成
+        profiling_data = await profiler.post(user_input)
+        if self.gist is not None:
+            # ユーザープロファイリングをGistへ保存
+            profiler.gist.patch(profiling_data)
+        # else:
+        # ローカルファイルへユーザープロファイルを保存する処理
+        del profiler
+
     async def ask(self, chat_messages: list[Message] = []):
         """AIへの質問"""
         user_input = ""
@@ -219,6 +245,8 @@ class AI:
                 print()
         # ユーザーの入力を会話履歴に追加
         chat_messages.append(Message(str(Role.USER), user_input))
+        # ユーザープロファイリングをバックグラウンドで進める非同期処理
+        asyncio.create_task(self.profiling(user_input))
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
@@ -235,7 +263,12 @@ class AI:
         # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
-            play_voice(ai_response, self.speaker, self.voice)
+            try:
+                play_voice(ai_response, self.speaker, self.voice)
+            except (EOFError, wave.Error) as wav_e:
+                print(f"""Error: 音声再生中にエラーが発生しました。
+                {wav_e}無視してテキストを表示します。
+                """)
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask(chat_messages)
@@ -289,6 +322,92 @@ class Summarizer(AI):
             "messages": [{
                 "role": str(Role.SYSTEM),
                 "content": Summarizer.system_role
+            }, {
+                "role": str(Role.USER),
+                "content": content
+            }]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(ENDPOINT,
+                                    headers=HEADERS,
+                                    data=json.dumps(data)) as response:
+                if response.status != 200:
+                    raise ValueError(
+                        f'Error: {response.status}, Message: {response.json()}'
+                    )
+                ai_response = await response.json()
+        content = get_content(ai_response)
+        return content
+
+
+class Profiler(AI):
+    """ユーザーの好みを分析するためのChatGPTインスタンス
+    """
+    # Summarizerでは下記プロパティは固定値として扱う
+    max_tokens = 500
+    temperature = 0
+    filename = "user_personality.txt"
+    system_role = """
+    出力例のようにして、発言内容からUserの好みをリストアップしてください。
+
+    ### 入力例 ###
+    # これまでのユーザーの好み
+    - 昼寝が好き
+    - 山登り
+    - プログラミング言語の中でも特にPythonが好き
+
+    # ユーザーの発言
+    来週は山登りに行くんだ。今朝の朝食は美味しかったな。いつもはコーヒーを飲むんだけどね今朝は紅茶が出てきただけど、ジャムトーストと合うんだな。そういや今日の仕事は大変そうなので、楽しみにしているドラマに間に合うか心配だな。
+
+    ### 出力例 ###
+    - 昼寝が好き
+    - プログラミング言語の中でも特にPythonが好き
+    - 山登り
+    - コーヒーを飲む
+    - ドラマ鑑賞
+    """
+
+    def __init__(self, gist):
+        """
+        * 親クラスから引き継がれるプロパティ
+            * `name`
+            * `filename`
+            * `gist`
+            * `chat_summary`
+        * 子クラスで定義された定数を使用
+            * `max_tokens`
+            * `temperature`
+            * `system_role`
+        """
+        if gist is not None:  # gistがNoneでない == ローカルモードで実行されていない
+            from .gist_memory import Gist
+            gist = Gist(Profiler.filename)
+        super().__init__(max_tokens=Profiler.max_tokens,
+                         temperature=Profiler.temperature,
+                         system_role=Profiler.system_role,
+                         filename=Profiler.filename,
+                         gist=gist)
+
+    async def post(self, user_input: str):
+        """ユーザーの発言を送信してユーザーの好みを分析する"""
+        user_profile = self.gist.get()  # これまでの好み
+        content = f"""
+            # これまでのユーザーの好み
+            {user_profile}
+
+            # ユーザーの発言
+            {user_input}
+            """
+        data = {
+            "model":
+            MODEL,
+            "max_tokens":
+            Profiler.max_tokens,
+            "temperature":
+            Profiler.temperature,
+            "messages": [{
+                "role": str(Role.SYSTEM),
+                "content": Profiler.system_role
             }, {
                 "role": str(Role.USER),
                 "content": content
