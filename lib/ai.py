@@ -204,6 +204,21 @@ class AI:
         self.gist.patch(self.chat_summary)
         del summarizer
 
+    async def profiling(self, user_input: str):
+        """ユーザーのプロファイリング分析用の
+        ChatGPT: Profilerを呼び出してユーザープロファイリングを実行し、
+        ユーザープロファイリングをgistへアップロードする。
+        """
+        profiler = Profiler(self.gist)
+        # ユーザープロファイリングを作成
+        profiling_data = await profiler.post(user_input)
+        if self.gist is not None:
+            # ユーザープロファイリングをGistへ保存
+            profiler.gist.patch(profiling_data)
+        # else:
+        # ローカルファイルへユーザープロファイルを保存する処理
+        del profiler
+
     async def ask(self, chat_messages: list[Message] = []):
         """AIへの質問"""
         user_input = ""
@@ -219,6 +234,8 @@ class AI:
                 print()
         # ユーザーの入力を会話履歴に追加
         chat_messages.append(Message(str(Role.USER), user_input))
+        # ユーザープロファイリングをバックグラウンドで進める非同期処理
+        asyncio.create_task(self.profiling(user_input))
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
@@ -289,6 +306,92 @@ class Summarizer(AI):
             "messages": [{
                 "role": str(Role.SYSTEM),
                 "content": Summarizer.system_role
+            }, {
+                "role": str(Role.USER),
+                "content": content
+            }]
+        }
+        async with aiohttp.ClientSession() as session:
+            async with session.post(ENDPOINT,
+                                    headers=HEADERS,
+                                    data=json.dumps(data)) as response:
+                if response.status != 200:
+                    raise ValueError(
+                        f'Error: {response.status}, Message: {response.json()}'
+                    )
+                ai_response = await response.json()
+        content = get_content(ai_response)
+        return content
+
+
+class Profiler(AI):
+    """ユーザーの好みを分析するためのChatGPTインスタンス
+    """
+    # Summarizerでは下記プロパティは固定値として扱う
+    max_tokens = 500
+    temperature = 0
+    filename = "user_personality.txt"
+    system_role = """
+    出力例のようにして、発言内容からUserの好みをリストアップしてください。
+
+    ### 入力例 ###
+    # これまでのユーザーの好み
+    - 昼寝が好き
+    - 山登り
+    - プログラミング言語の中でも特にPythonが好き
+
+    # ユーザーの発言
+    来週は山登りに行くんだ。今朝の朝食は美味しかったな。いつもはコーヒーを飲むんだけどね今朝は紅茶が出てきただけど、ジャムトーストと合うんだな。そういや今日の仕事は大変そうなので、楽しみにしているドラマに間に合うか心配だな。
+
+    ### 出力例 ###
+    - 昼寝が好き
+    - プログラミング言語の中でも特にPythonが好き
+    - 山登り
+    - コーヒーを飲む
+    - ドラマ鑑賞
+    """
+
+    def __init__(self, gist):
+        """
+        * 親クラスから引き継がれるプロパティ
+            * `name`
+            * `filename`
+            * `gist`
+            * `chat_summary`
+        * 子クラスで定義された定数を使用
+            * `max_tokens`
+            * `temperature`
+            * `system_role`
+        """
+        if gist is not None:  # gistがNoneでない == ローカルモードで実行されていない
+            from .gist_memory import Gist
+            gist = Gist(Profiler.filename)
+        super().__init__(max_tokens=Profiler.max_tokens,
+                         temperature=Profiler.temperature,
+                         system_role=Profiler.system_role,
+                         filename=Profiler.filename,
+                         gist=gist)
+
+    async def post(self, user_input: str):
+        """ユーザーの発言を送信してユーザーの好みを分析する"""
+        user_profile = self.gist.get()  # これまでの好み
+        content = f"""
+            # これまでのユーザーの好み
+            {user_profile}
+
+            # ユーザーの発言
+            {user_input}
+            """
+        data = {
+            "model":
+            MODEL,
+            "max_tokens":
+            Profiler.max_tokens,
+            "temperature":
+            Profiler.temperature,
+            "messages": [{
+                "role": str(Role.SYSTEM),
+                "content": Profiler.system_role
             }, {
                 "role": str(Role.USER),
                 "content": content
