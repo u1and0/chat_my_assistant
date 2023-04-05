@@ -204,21 +204,21 @@ class AI:
         self.gist.patch(self.chat_summary)
         del summarizer
 
-    async def ask(self, chat_messages: list[Message]):
+    async def ask(self, chat_messages: list[Message] = []):
         """AIへの質問"""
-        while True:  # 入力待受
+        user_input = ""
+        while user_input.strip() == "":  # 入力待受
+            # 待っても入力がなければ、再度質問待ち
+            # 入力があればループを抜け回答を考えてもらう
             try:
                 user_input = await wait_for_input(TIMEOUT)
                 user_input = user_input.replace("/n", " ")
                 if user_input.strip() in ("q", "exit"):
                     raise SystemExit
-                # 待っても入力がなければ、再度質問待ち
-                # 入力があればループを抜け回答を考えてもらう
-                if user_input.strip() != "":
-                    chat_messages.append(Message(str(Role.USER), user_input))
-                    break
             except KeyboardInterrupt:
                 print()
+        # ユーザーの入力を会話履歴に追加
+        chat_messages.append(Message(str(Role.USER), user_input))
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
