@@ -81,7 +81,10 @@ def print_one_by_one(text):
 
 
 async def wait_for_input(timeout: float) -> str:
-    """時間経過でタイムアウトエラーを発生させる"""
+    """一定時間内に入力があればその入力を返し、そうでなければランダムな返答を返す関数。
+    Parameter: 入力を待つ最大時間（秒単位）
+    Return: 入力があった場合はその入力、なかった場合はランダムに選ばれた返答
+    """
     silent_input = [
         "",
         "続けて",
@@ -89,7 +92,6 @@ async def wait_for_input(timeout: float) -> str:
         "これまでの話題から一つピックアップして",
     ]
     try:
-        # 5分入力しなければ下記のいずれかの指示をしてAIが話し始める
         input_task = asyncio.create_task(async_input())
         done, _ = await asyncio.wait({input_task}, timeout=timeout)
         if input_task in done:
@@ -99,7 +101,7 @@ async def wait_for_input(timeout: float) -> str:
         input_task.cancel()
         raise
     except asyncio.TimeoutError:
-        # 5分黙っていたらランダムに一つ質問
+        # タイムアウトしたらランダムな質問を返す
         return random.choice(silent_input)
     except KeyboardInterrupt:
         sys.exit(1)
@@ -266,9 +268,7 @@ class AI:
             try:
                 play_voice(ai_response, self.speaker, self.voice)
             except (EOFError, wave.Error) as wav_e:
-                print(f"""Error: 音声再生中にエラーが発生しました。
-                {wav_e}無視してテキストを表示します。
-                """)
+                print("Error: 音声再生中にエラーが発生しました。", f"{wav_e}無視してテキストを表示します。")
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
         await self.ask(chat_messages)
