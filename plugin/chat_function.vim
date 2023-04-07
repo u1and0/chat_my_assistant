@@ -13,6 +13,7 @@ function! Chat()
     normal! "xpA
     " execute "normal! a"
     set nopaste
+    set ft=markdown
 endfunction
 
 vnoremap <leader>c :call Chat()<CR>
