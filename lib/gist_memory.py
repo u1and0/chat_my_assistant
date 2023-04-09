@@ -16,9 +16,9 @@ import requests
 
 class Gist:
     """gist API handler"""
-    __id = os.getenv("GIST_ID")
+    __id = os.environ["GIST_ID"]
     __url = "https://api.github.com/gists/" + __id
-    __token = os.getenv("GITHUB_TOKEN")
+    __token = os.environ["GITHUB_TOKEN"]
     __client_id = os.getenv("GIST_CLIENT_ID")
     __client_secret = os.getenv("GIST_CLIENT_SECRET")
 

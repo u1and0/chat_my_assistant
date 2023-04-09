@@ -19,7 +19,7 @@ import aiohttp
 from .voicevox_character import CV, Mode
 
 # ChatGPT API Key
-API_KEY = os.getenv("CHATGPT_API_KEY")
+API_KEY = os.environ["CHATGPT_API_KEY"]
 # ChatGPT API Endpoint
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 # ChatGPT API header
