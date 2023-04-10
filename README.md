@@ -45,6 +45,7 @@ optional arguments:
 $ git clone https://github.com/u1and0/chat_my_assistant
 $ cd chat_my_assistant
 $ pip install -r requirements.txt
+$ sudo ln -s /home/your_name/path/to/chat_my_assistant/chatme.py /usr/bin/chatme
 ```
 
 # Setting
