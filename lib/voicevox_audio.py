@@ -20,7 +20,7 @@ import wave
 import requests
 from pydub import AudioSegment
 from pydub.playback import play
-from .voicevox_character import CV, Mode
+from lib import CV, Mode
 
 apikey = os.getenv("VOICEVOX_API_KEY")
 url = "https://api.tts.quest/v1"
@@ -54,32 +54,34 @@ def synthesis(data, speaker: Union[int, CV] = CV(0)) -> requests.Response:
                          params=params)
 
 
-def get_voice(text,
-              speaker: Union[int, CV] = CV(0),
-              mode: Union[int, Mode] = Mode.SLOW) -> requests.Response:
+def get_voice(
+    text, mode: Union[int, Mode],
+    speaker: Union[int, CV] = CV(0)) -> requests.Response:
     """VOICEVOX web apiへアクセスしてaudioレスポンスを得る"""
-    if mode == 3:  # Mode LOCAL
+    if not 0 < mode < 4:
+        raise ValueError(f"error: mode is {mode}, mode must 1 or 2 or 3")
+    if mode == Mode.LOCAL:
         body = audio_query(text, speaker=speaker).json()
         response = synthesis(body, speaker=speaker)
         return response
-    elif mode == 2:  # Mode FAST
+    if mode == Mode.FAST:
         params = {"key": apikey, "speaker": int(speaker), "text": text}
         response = requests.get(f"{fast_url}/voicevox/audio", params)
         return response
-    # Mode SLOW
-    wav_api = requests.get(
-        f"{url}/voicevox",  # 末尾のスラッシュがないとエラー
-        params={
-            "speaker": int(speaker),
-            "text": text
-        })
-    if wav_api.status_code != 200:
-        print("Warnig: Use fast mode")
-        raise requests.HTTPError(wav_api.status_code)
-    wav_url = wav_api.json()["wavDownloadUrl"]
-    sleep(3)
-    response = requests.get(wav_url)
-    return response
+    if mode == Mode.SLOW:
+        wav_api = requests.get(
+            f"{url}/voicevox",  # 末尾のスラッシュがないとエラー
+            params={
+                "speaker": int(speaker),
+                "text": text
+            })
+        if wav_api.status_code != 200:
+            print("Warnig: Use fast mode")
+            raise requests.HTTPError(wav_api.status_code)
+        wav_url = wav_api.json()["wavDownloadUrl"]
+        sleep(3)
+        response = requests.get(wav_url)
+        return response
 
 
 def is_wav_file(filename):
@@ -109,10 +111,11 @@ def build_audio(binary, wav_file=None):
 
 def play_voice(text,
                speaker: Union[int, CV] = CV.四国めたんあまあま,
-               mode: Union[int, Mode] = Mode.SLOW):
+               mode: Union[int, Mode] = Mode.SLOW,
+               wav_file=None):
     """テキストの再生"""
-    resp = get_voice(text, speaker, mode)
-    audio = build_audio(resp.content)
+    resp = get_voice(text, mode, speaker)
+    audio = build_audio(resp.content, wav_file)
     play(audio)
 
 
@@ -136,4 +139,6 @@ if __name__ == "__main__":
     # except requests.HTTPError:
     #     resp = get_voice(text, mode=Mode.FAST)
     print(Mode(args.voicemode))
-    play_voice(args.text, speaker=args.speaker, mode=Mode(args.voicemode))
+    play_voice(args.text,
+               speaker=args.speaker,
+               mode=Mode(args.voicemode))
