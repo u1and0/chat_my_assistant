@@ -16,6 +16,7 @@ import asyncio
 import wave
 import yaml
 import aiohttp
+import tiktoken
 from .voicevox_character import CV, Mode
 
 # ChatGPT API Key
@@ -121,6 +122,15 @@ def multi_input() -> str:
     return line + lines
 
 
+def is_limit_error(messages: list[Message]) -> bool:
+    """modelのAPI token上限を超えているか"""
+    enc = tiktoken.encoding_for_model(MODEL)
+    limit = 4069
+    contents_str = '\n'.join([m.content for m in messages])
+    tokens = len(enc.encode(contents_str))
+    return tokens >= limit
+
+
 class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
@@ -158,29 +168,41 @@ class AI:
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
-    async def post(self, chat_messages: list[Message]) -> str:
-        """ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す"""
+    async def post(self, chat_messages: list[Message]) -> (str, list[Message]):
+        """ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す
+        APIへ渡す前にtoken数を計算して、最初の方の会話から取り除く
+        """
         if self.gist is not None:
             from .gist_memory import Gist
             profiling_gist = Gist(Profiler.filename)
-        # else:
-        # ローカルのユーザープロファイルを読み込む
-        # ユーザーが質問するたびにユーザープロファイリングの結果が変わるので、
-        # POSTするたびにユーザープロファイリングの取得処理が必要
-        user_profile = profiling_gist.get()
-        messages = [{
-            "role": str(Role.SYSTEM),
-            "content": self.system_role + user_profile
-        }, {
-            "role": str(Role.ASSISTANT),
-            "content": self.chat_summary
-        }]
-        messages += [h._asdict() for h in chat_messages]  # 会話のやり取り
+            # else:
+            # ローカルのユーザープロファイルを読み込む
+            # ユーザーが質問するたびにユーザープロファイリングの結果が変わるので、
+            # POSTするたびにユーザープロファイリングの取得処理が必要
+            user_profile = profiling_gist.get()
+        messages = [
+            Message(str(Role.SYSTEM), self.system_role + user_profile),
+            Message(str(Role.ASSISTANT), self.chat_summary),
+        ] + chat_messages  # 会話のやり取り
+        # messages = [{
+        #     "role": str(Role.SYSTEM),
+        #     "content": self.system_role + user_profile
+        # }, {
+        #     "role": str(Role.ASSISTANT),
+        #     "content": self.chat_summary
+        # }]
+        # [h._asdict() for h in chat_messages]
+        while is_limit_error(messages):
+            messages.pop(2)
+            # index==0: system role
+            # index==1: summary
+            # index==2: 最初の会話履歴
+            # なのでindex==2から削除していく
         data = {
             "model": MODEL,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
-            "messages": messages
+            "messages": [m._asdict() for m in messages]
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(ENDPOINT,
@@ -188,7 +210,10 @@ class AI:
                                     data=json.dumps(data)) as response:
                 ai_response = await response.json()
         content = get_content(ai_response)
-        return content
+        messages.append(Message(str(Role.ASSISTANT), content))  # append answer
+        messages.pop()  # remove system role
+        messages.pop()  # remove summary
+        return messages
 
     def set_speaker(self, sp):
         """ AI.speakerの判定
@@ -252,16 +277,11 @@ class AI:
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
-        ai_response: str = await self.post(chat_messages)
+        response_messages = await self.post(chat_messages)
+        ai_response = response_messages[-1].content
         spinner_task.cancel()
-        # 会話履歴に追加
-        chat_messages.append(Message(str(Role.ASSISTANT), ai_response))
-        # N会話分のlimitを超えるとtoken節約のために会話の内容を忘れる
-        # 2倍するのはUserの質問とAssistantと回答で1セットだから。
-        while len(chat_messages) > self.messages_limit * 2:
-            chat_messages.pop(0)
         # 会話の要約をバックグラウンドで進める非同期処理
-        asyncio.create_task(self.summarize(chat_messages))
+        asyncio.create_task(self.summarize(response_messages))
         # 音声出力オプションがあれば、音声の再生
         if self.voice > 0:
             from lib.voicevox_audio import play_voice
