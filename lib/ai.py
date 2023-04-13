@@ -66,8 +66,8 @@ def get_content(resp_json: dict) -> str:
     """JSONからAIの回答を取得"""
     try:
         content = resp_json['choices'][0]['message']['content']
-    except KeyError:
-        raise KeyError(f"キーが見つかりません。{resp_json}")
+    except KeyError as k_e:
+        raise KeyError(f"キーが見つかりません。{resp_json}") from k_e
     return content
 
 
@@ -122,12 +122,11 @@ def multi_input() -> str:
     return line + lines
 
 
-def is_limit_error(messages: list[Message]) -> bool:
+def is_over_limit(contents: str) -> bool:
     """modelのAPI token上限を超えているか"""
     enc = tiktoken.encoding_for_model(MODEL)
     limit = 4069
-    contents_str = '\n'.join([m.content for m in messages])
-    tokens = len(enc.encode(contents_str))
+    tokens = len(enc.encode(contents))
     return tokens >= limit
 
 
@@ -183,16 +182,9 @@ class AI:
         messages = [
             Message(str(Role.SYSTEM), self.system_role + user_profile),
             Message(str(Role.ASSISTANT), self.chat_summary),
-        ] + chat_messages  # 会話のやり取り
-        # messages = [{
-        #     "role": str(Role.SYSTEM),
-        #     "content": self.system_role + user_profile
-        # }, {
-        #     "role": str(Role.ASSISTANT),
-        #     "content": self.chat_summary
-        # }]
-        # [h._asdict() for h in chat_messages]
-        while is_limit_error(messages):
+        ] + chat_messages
+        contents = '\n'.join([m.content for m in messages])
+        while is_over_limit(contents):
             messages.pop(2)
             # index==0: system role
             # index==1: summary
@@ -211,9 +203,7 @@ class AI:
                 ai_response = await response.json()
         content = get_content(ai_response)
         messages.append(Message(str(Role.ASSISTANT), content))  # append answer
-        messages.pop()  # remove system role
-        messages.pop()  # remove summary
-        return messages
+        return messages[2:]  # remove system role & summary
 
     def set_speaker(self, sp):
         """ AI.speakerの判定
@@ -328,10 +318,23 @@ class Summarizer(AI):
 
     async def post(self, messages: list[Message]) -> str:
         """会話履歴と会話の内容を送信して会話の要約を作る"""
-        content = "\n".join([self.chat_summary] + [
-            f"- {self.name}: {m.content}" if m.role ==
-            Role.ASSISTANT else f"- User: {m.content}" for m in messages
-        ])
+        messages_str = [
+            f"- {self.name}: {m.content}"
+            if m.role == Role.ASSISTANT else f"- User: {m.content}"
+            for m in messages
+        ]
+        split_summary: list[str] = self.chat_summary.split("\n")
+        while True:
+            # split_summary: summaryの改行区切り
+            # system_role: Summarizerの役割
+            # content: 会話履歴
+            send_msg = [Summarizer.system_role] + split_summary + messages_str
+            # これら３つの要素を改行でつなげてトークン計算
+            # messagesが最大トークンに収まるまで続ける
+            if not is_over_limit('\n'.join(send_msg)):
+                break
+            # summaryの上から一行ずつ削除
+            split_summary.pop()
         data = {
             "model":
             MODEL,
@@ -344,7 +347,7 @@ class Summarizer(AI):
                 "content": Summarizer.system_role
             }, {
                 "role": str(Role.USER),
-                "content": content
+                "content": '\n'.join(split_summary + messages_str)
             }]
         }
         async with aiohttp.ClientSession() as session:
