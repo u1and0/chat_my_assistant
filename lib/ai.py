@@ -54,6 +54,11 @@ class Role(Enum):
         return self.name.lower()
 
 
+class TooManyRequestsError(Exception):
+    def __init__(self, message):
+        self.message = message
+
+
 async def spinner():
     """非同期処理待ちスピナー"""
     dots = cycle([".", "..", "..."])
@@ -130,6 +135,32 @@ def is_over_limit(contents: str) -> bool:
     return tokens >= limit
 
 
+def retry(max_retries=5, sleep_time=10):
+    """wrapper function for retry HTTP requests
+    429エラーを受信した際にretryカウントを超えるまで再試行する
+    usage:
+        @retry
+        async def post():
+            ...
+    """
+    def decorator(func):
+        async def wrapper(*args, **kwargs):
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    result = await func(*args, **kwargs)
+                    return result
+                except TooManyRequestsError as many_e:
+                    retry_count += 1
+                    if retry_count >= max_retries:
+                        raise many_e
+                    else:
+                        await asyncio.sleep(sleep_time)
+            return wrapper
+
+        return decorator
+
+
 class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
@@ -167,8 +198,10 @@ class AI:
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
+    @retry()
     async def post(self, chat_messages: list[Message]) -> (str, list[Message]):
-        """ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す
+        """AI.post
+        ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す
         APIへ渡す前にtoken数を計算して、最初の方の会話から取り除く
         """
         if self.gist is not None:
@@ -200,6 +233,11 @@ class AI:
             async with session.post(ENDPOINT,
                                     headers=HEADERS,
                                     data=json.dumps(data)) as response:
+                if response.status == 429:
+                    raise TooManyRequestsError("Too many requests")
+                elif response.status != 200:
+                    raise ValueError('{}: {}'.format(response.status,
+                                                     response.json()))
                 ai_response = await response.json()
         content = get_content(ai_response)
         messages.append(Message(str(Role.ASSISTANT), content))  # append answer
@@ -316,8 +354,11 @@ class Summarizer(AI):
                          gist=gist,
                          chat_summary=chat_summary)
 
+    @retry()
     async def post(self, messages: list[Message]) -> str:
-        """会話履歴と会話の内容を送信して会話の要約を作る"""
+        """Summarizer.post
+        会話履歴と会話の内容を送信して会話の要約を作る
+        """
         messages_str = [
             f"- {self.name}: {m.content}"
             if m.role == Role.ASSISTANT else f"- User: {m.content}"
@@ -354,10 +395,11 @@ class Summarizer(AI):
             async with session.post(ENDPOINT,
                                     headers=HEADERS,
                                     data=json.dumps(data)) as response:
-                if response.status != 200:
-                    raise ValueError(
-                        f'Error: {response.status}, Message: {response.json()}'
-                    )
+                if response.status == 429:
+                    raise TooManyRequestsError("Too many requests")
+                elif response.status != 200:
+                    raise ValueError('{}: {}'.format(response.status,
+                                                     response.json()))
                 ai_response = await response.json()
         content = get_content(ai_response)
         return content
@@ -411,8 +453,11 @@ class Profiler(AI):
                          filename=Profiler.filename,
                          gist=gist)
 
+    @retry()
     async def post(self, user_input: str):
-        """ユーザーの発言を送信してユーザーの好みを分析する"""
+        """Profiler.post
+        ユーザーの発言を送信してユーザーの好みを分析する
+        """
         user_profile = self.gist.get()  # これまでの好み
         content = f"""
             # これまでのユーザーの好み
@@ -440,10 +485,11 @@ class Profiler(AI):
             async with session.post(ENDPOINT,
                                     headers=HEADERS,
                                     data=json.dumps(data)) as response:
-                if response.status != 200:
-                    raise ValueError(
-                        f'Error: {response.status}, Message: {response.json()}'
-                    )
+                if response.status == 429:
+                    raise TooManyRequestsError("Too many requests")
+                elif response.status != 200:
+                    raise ValueError('{}: {}'.format(response.status,
+                                                     response.json()))
                 ai_response = await response.json()
         content = get_content(ai_response)
         return content
