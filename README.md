@@ -61,7 +61,7 @@ $ pip install -r requirements.txt
 * VOICEVOX API key
 
 
-see more [ChatGPTに人格と記憶と声を持たせて話し相手になってもらう](https://qiita.com/drafts/1446f763aaf2a8b0c804)
+see more [ChatGPTに人格と記憶と声を持たせて話し相手になってもらう](https://qiita.com/1446f763aaf2a8b0c804)
 
 
 # LICENCE
