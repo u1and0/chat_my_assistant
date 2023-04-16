@@ -37,8 +37,6 @@ TIMEOUT = 300
 CONFIG_FILE = "character.yml"
 # 質問待受で表示されるプロンプト
 PROMPT = "あなた: "
-# OpenAI model
-MODEL = "gpt-3.5-turbo"
 # 会話履歴の形式
 Message = namedtuple("Message", ["role", "content"])
 
@@ -134,9 +132,9 @@ def multi_input() -> str:
     return line + lines
 
 
-def is_over_limit(contents: str) -> bool:
+def is_over_limit(contents: str, model: str) -> bool:
     """modelのAPI token上限を超えているか"""
-    enc = tiktoken.encoding_for_model(MODEL)
+    enc = tiktoken.encoding_for_model(model)
     limit = 4096
     tokens = len(enc.encode(contents))
     return tokens >= limit
@@ -163,19 +161,21 @@ class AI:
                  filename="chatgpt-assistant.txt",
                  gist=None,
                  chat_summary="",
-                 messages_limit: int = 2,
                  voice: Mode = Mode.NONE,
+                 listen: bool = False,
+                 model: str = "gpt-3.5-turbo",
                  speaker: CV = CV.四国めたんノーマル):
         # YAMLから設定するオプション
-        self.name = name
+        self.name = name  # AIキャラ名
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.system_role = system_role + AI.default_system_role
-        self.filename = filename
+        self.filename = filename  # キャラクタ設定YAML名
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
-        self.messages_limit = int(messages_limit)  # 会話履歴のストック上限数
-        self.voice = voice
+        self.voice = voice  # 音声の生成先
+        self.listen = listen  # Trueで入力をマイクから拾う
+        self.model = model  # ChatGPT モデル
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
@@ -197,14 +197,14 @@ class AI:
             Message(str(Role.ASSISTANT), self.chat_summary),
         ] + chat_messages
         contents = '\n'.join([m.content for m in messages])
-        while is_over_limit(contents):
+        while is_over_limit(contents, self.model):
             messages.pop(2)
             # index==0: system role
             # index==1: summary
             # index==2: 最初の会話履歴
             # なのでindex==2から削除していく
         data = {
-            "model": MODEL,
+            "model": self.model,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
             "messages": [m._asdict() for m in messages]
@@ -272,7 +272,7 @@ class AI:
             # 待っても入力がなければ、再度質問待ち
             # 入力があればループを抜け回答を考えてもらう
             try:
-                user_input = await wait_for_input(TIMEOUT, True)
+                user_input = await wait_for_input(TIMEOUT, self.listen)
                 user_input = user_input.replace("/n", " ")
                 if user_input.strip() in ("q", "exit"):
                     raise SystemExit
@@ -351,13 +351,13 @@ class Summarizer(AI):
             send_msg = [Summarizer.system_role] + split_summary + messages_str
             # これら３つの要素を改行でつなげてトークン計算
             # messagesが最大トークンに収まるまで続ける
-            if not is_over_limit('\n'.join(send_msg)):
+            if not is_over_limit('\n'.join(send_msg), self.model):
                 break
             # summaryの上から一行ずつ削除
             split_summary.pop()
         data = {
             "model":
-            MODEL,
+            self.model,
             "max_tokens":
             Summarizer.max_tokens,
             "temperature":
@@ -446,7 +446,7 @@ class Profiler(AI):
             """
         data = {
             "model":
-            MODEL,
+            self.model,
             "max_tokens":
             Profiler.max_tokens,
             "temperature":
@@ -473,9 +473,11 @@ class Profiler(AI):
         return content
 
 
-def ai_constructor(name: str = "ChatGPT",
-                   voice: Mode = Mode.NONE,
+def ai_constructor(listen: bool = False,
+                   model: str = "gpt-3.5-turbo",
+                   name: str = "ChatGPT",
                    speaker=None,
+                   voice: Mode = Mode.NONE,
                    character_file: Optional[str] = None) -> AI:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
@@ -507,10 +509,13 @@ def ai_constructor(name: str = "ChatGPT",
     ai = [a for a in ais if a.name == name][-1]
 
     # コマンドライン引数から設定を適用
+    # YAMLの設定を上書きする
     if not character_file:
         # 会話履歴を読み込む
         ai.gist = Gist(ai.filename)
         ai.chat_summary = ai.gist.get()
+    ai.listen = listen
+    ai.model = model
     # AIの音声生成モードを設定
     if isinstance(voice, int):
         voice = Mode(voice)
