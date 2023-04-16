@@ -18,6 +18,7 @@ import yaml
 import aiohttp
 import tiktoken
 from .voicevox_character import CV, Mode
+from .mic_input import async_mic_input
 
 # ChatGPT API Key
 API_KEY = os.environ["CHATGPT_API_KEY"]
@@ -86,7 +87,7 @@ def print_one_by_one(text):
             return
 
 
-async def wait_for_input(timeout: float) -> str:
+async def wait_for_input(timeout: float, mic_input=False) -> str:
     """一定時間内に入力があればその入力を返し、そうでなければランダムな返答を返す関数。
     Parameter: 入力を待つ最大時間（秒単位）
     Return: 入力があった場合はその入力、なかった場合はランダムに選ばれた返答
@@ -98,7 +99,13 @@ async def wait_for_input(timeout: float) -> str:
         "これまでの話題から一つピックアップして",
     ]
     try:
-        input_task = asyncio.create_task(async_input())
+        # if mic_input:
+        #     input_task = asyncio.create_task(async_mic_input())
+        # else:
+        #     input_task = asyncio.create_task(async_input())
+        # done, _ = await asyncio.wait({input_task}, timeout=timeout)
+        input_func = async_mic_input if mic_input else async_input
+        input_task = asyncio.create_task(input_func())
         done, _ = await asyncio.wait({input_task}, timeout=timeout)
         if input_task in done:
             return input_task.result()
@@ -130,7 +137,7 @@ def multi_input() -> str:
 def is_over_limit(contents: str) -> bool:
     """modelのAPI token上限を超えているか"""
     enc = tiktoken.encoding_for_model(MODEL)
-    limit = 4069
+    limit = 4096
     tokens = len(enc.encode(contents))
     return tokens >= limit
 
@@ -265,7 +272,7 @@ class AI:
             # 待っても入力がなければ、再度質問待ち
             # 入力があればループを抜け回答を考えてもらう
             try:
-                user_input = await wait_for_input(TIMEOUT)
+                user_input = await wait_for_input(TIMEOUT, True)
                 user_input = user_input.replace("/n", " ")
                 if user_input.strip() in ("q", "exit"):
                     raise SystemExit
