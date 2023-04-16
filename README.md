@@ -63,16 +63,24 @@ export CHATGPT_API_KEY='sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
 
 # Requirements
 
-* pydub>=0.25.1
-* PyYAML>=6.0
 * requests>=2.28.1
 * openai API key
+* aiohttp>=3.8.1
+* tiktoken>=0.3.3
 
 # Optional
 
-* Git(Gist) API key
+## 音声を出したいとき
+* pydub>=0.25.1
 * Install VOICEVOX
 * VOICEVOX API key
+
+## 音声を聞かせたいとき
+* speechrecognition>=3.10.0
+
+## 記憶させたいとき
+* PyYAML>=6.0
+* Git(Gist) API key
 
 
 see more [ChatGPTに人格と記憶と声を持たせて話し相手になってもらう](https://qiita.com/1446f763aaf2a8b0c804)
