@@ -137,23 +137,6 @@ def is_over_limit(contents: str, model: str) -> bool:
     return tokens >= limit
 
 
-def retry(retries=5, sleep_seconds=10):
-    def decorator(func):
-        async def wrapper(self, *args, **kwargs):
-            for i in range(retries):
-                try:
-                    return await func(self, *args, **kwargs)
-                except TooManyRequestsError:
-                    if i < retries - 1:
-                        await asyncio.sleep(sleep_seconds)
-                    else:
-                        raise
-
-        return wrapper
-
-    return decorator
-
-
 class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
@@ -192,10 +175,6 @@ class AI:
         self.model = model  # ChatGPT モデル
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
-
-    @retry()
-    async def post_with_retry(self, *args, **kwargs):
-        await self.post(*args, **kwargs)
 
     async def post(self, chat_messages: list[Message]) -> list[Message]:
         """AI.post
@@ -263,7 +242,7 @@ class AI:
         summarizer = Summarizer(self.name, self.filename, self.gist,
                                 self.chat_summary)
         # 要約文を作成
-        self.chat_summary = await summarizer.post_with_retry(chat_messages)
+        self.chat_summary = await summarizer.post(chat_messages)
         # 要約文をGistへ保存
         self.gist.patch(self.chat_summary)
         del summarizer
@@ -275,7 +254,7 @@ class AI:
         """
         profiler = Profiler(self.gist)
         # ユーザープロファイリングを作成
-        profiling_data = await profiler.post_with_retry(user_input)
+        profiling_data = await profiler.post(user_input)
         if self.gist is not None:
             # ユーザープロファイリングをGistへ保存
             profiler.gist.patch(profiling_data)
@@ -303,7 +282,7 @@ class AI:
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
-        response_messages = await self.post_with_retry(chat_messages)
+        response_messages = await self.post(chat_messages)
         ai_response = response_messages[-1].content
         spinner_task.cancel()
         # 会話の要約をバックグラウンドで進める非同期処理
