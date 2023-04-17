@@ -190,6 +190,14 @@ class AI:
             # index==1: summary
             # index==2: 最初の会話履歴
             # なのでindex==2から削除していく
+
+        # messages debug print
+        js = json.dumps([m._asdict() for m in messages],
+                        indent=4,
+                        ensure_ascii=False)
+        print(js)
+        # dubug
+
         data = {
             "model": self.model,
             "max_tokens": self.max_tokens,
@@ -208,7 +216,7 @@ class AI:
                 ai_response = await response.json()
         content = get_content(ai_response)
         messages.append(Message(str(Role.ASSISTANT), content))  # append answer
-        return messages[2:]  # remove system role & summary
+        return messages[1:]  # remove system role & summary
 
     def set_speaker(self, sp):
         """ AI.speakerの判定
@@ -269,7 +277,7 @@ class AI:
                 print("Error: 音声再生中にエラーが発生しました。", f"{wav_e}無視してテキストを表示します。")
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
-        await self.ask(chat_messages)
+        await self.ask(response_messages)
 
 
 class Summarizer(AI):
@@ -301,7 +309,7 @@ class Summarizer(AI):
         - Work today is going to be hard and I am worried if I will be able to make it to the drama I am looking forward to.
 
         # User Preference
-        - I like napping.
+        - napping
         - Likes Python among other programming languages
         - Climb mountains
         - Drinking coffee
