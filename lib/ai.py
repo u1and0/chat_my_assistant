@@ -129,14 +129,6 @@ def multi_input() -> str:
     return line + lines
 
 
-def is_over_limit(contents: str, model: str) -> bool:
-    """modelのAPI token上限を超えているか"""
-    enc = tiktoken.encoding_for_model(model)
-    limit = 4096
-    tokens = len(enc.encode(contents))
-    return tokens >= limit
-
-
 class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
@@ -179,17 +171,40 @@ class AI:
         ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す
         APIへ渡す前にtoken数を計算して、最初の方の会話から取り除く
         """
-        messages = [
-            Message(str(Role.SYSTEM), self.system_role + self.chat_summary),
-            # Message(str(Role.ASSISTANT), self.chat_summary),
-        ] + chat_messages
-        contents = '\n'.join([m.content for m in messages])
-        while is_over_limit(contents, self.model):
-            messages.pop(2)
-            # index==0: system role
-            # index==1: summary
-            # index==2: 最初の会話履歴
-            # なのでindex==2から削除していく
+        messages = []
+        while True:
+            # messagesにシステムプロンプトと会話要約および会話履歴を結合する
+            messages = [
+                Message(str(Role.SYSTEM),
+                        self.system_role + self.chat_summary),
+                # Message(str(Role.ASSISTANT), self.chat_summary),
+            ] + chat_messages
+            # roleを除いた会話の内容だけを文字列として結合する
+            contents = "\n".join([m.content for m in messages])
+            # contentsのtokens上限未満になるまで続ける
+            if not self.is_over_limit(contents):
+                break
+            # system_role, summary, messagesの中で最も重要度の低い
+            # summaryの１行目を削除する
+            chuncks = self.chat_summary.split("\n")
+            chuncks.pop(1)
+            self.chat_summary = "\n".join(chuncks)
+            # Summaryの一行目は # Summary Contentなのでpop(1)
+            #
+            # ai.chat_summaryの例
+            # ---
+            # # Summary Content
+            # - Planning to go mountain climbing next week.
+            # - Breakfast this morning was good.
+            # - I usually drink coffee, but today I was served tea, which went well with the jam toast.
+            # - Work today is going to be hard and I am worried if I will be able to make it to the drama I am looking forward to.
+            #
+            # # User Preference
+            # - napping
+            # - Likes Python among other programming languages
+            # - Climb mountains
+            # - Drinking coffee
+            # - Watching TV dramas
 
         # messages debug print
         js = json.dumps([m._asdict() for m in messages],
@@ -217,6 +232,16 @@ class AI:
         content = get_content(ai_response)
         messages.append(Message(str(Role.ASSISTANT), content))  # append answer
         return messages[1:]  # remove system role & summary
+
+    def is_over_limit(self, contents: str) -> bool:
+        """modelのAPI token上限を超えているか"""
+        tokens = self.token_length(contents)
+        limit = 4096
+        return tokens >= limit
+
+    def token_length(self, contents: str) -> int:
+        enc = tiktoken.encoding_for_model(self.model)
+        return len(enc.encode(contents))
 
     def set_speaker(self, sp):
         """ AI.speakerの判定
@@ -373,9 +398,10 @@ class Summarizer(AI):
         """
         messages_str = [
             f"- {self.name}: {m.content}"
-            if m.role == Role.ASSISTANT else f"- User: {m.content}"
+            if m.role == str(Role.ASSISTANT) else f"- User: {m.content}"
             for m in messages
         ]
+        print(messages_str)
         split_summary: list[str] = self.chat_summary.split("\n")
         while True:
             # split_summary: summaryの改行区切り
@@ -384,10 +410,14 @@ class Summarizer(AI):
             send_msg = [Summarizer.system_role] + split_summary + messages_str
             # これら３つの要素を改行でつなげてトークン計算
             # messagesが最大トークンに収まるまで続ける
-            if not is_over_limit('\n'.join(send_msg), self.model):
+            if not self.is_over_limit('\n'.join(send_msg)):
                 break
             # summaryの上から一行ずつ削除
-            split_summary.pop()
+            split_summary.pop(1)
+        content: str = '\n'.join(split_summary + messages_str)
+        print(self.system_role)
+        print(content)
+        print(self.token_length('\n'.join(send_msg)), "tokens")
         data = {
             "model":
             self.model,
@@ -400,7 +430,7 @@ class Summarizer(AI):
                 "content": Summarizer.system_role
             }, {
                 "role": str(Role.USER),
-                "content": '\n'.join(split_summary + messages_str)
+                "content": content
             }]
         }
         async with aiohttp.ClientSession() as session:
@@ -409,7 +439,7 @@ class Summarizer(AI):
                                     data=json.dumps(data)) as response:
                 if response.status == 429:
                     raise TooManyRequestsError("Too many requests")
-                elif response.status != 200:
+                elif response.status >= 400:
                     raise ValueError('{}: {}'.format(response.status,
                                                      response.json()))
                 ai_response = await response.json()
