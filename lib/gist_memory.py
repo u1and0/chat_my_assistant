@@ -16,9 +16,9 @@ import requests
 
 class Gist:
     """gist API handler"""
-    __id = os.getenv("GIST_ID")
+    __id = os.environ["GIST_ID"]
     __url = "https://api.github.com/gists/" + __id
-    __token = os.getenv("GITHUB_TOKEN")
+    __token = os.environ["GITHUB_TOKEN"]
     __client_id = os.getenv("GIST_CLIENT_ID")
     __client_secret = os.getenv("GIST_CLIENT_SECRET")
 
@@ -51,8 +51,7 @@ class Gist:
     def get(self):
         """Gist上の指定ファイルの内容を取得"""
         resp = requests.get(Gist.__url, params=Gist.set_params())
-        if resp.status_code != 200:
-            raise requests.HTTPError(f"{resp.json()}")
+        resp.raise_for_status()
         content = resp.json()["files"][self.filename]["content"]
         return content
 
@@ -66,5 +65,6 @@ class Gist:
         resp = requests.patch(Gist.__url,
                               headers=headers,
                               params=Gist.set_params(),
-                              data=json.dumps(data)).json()
-        return resp["files"][self.filename]["content"]
+                              data=json.dumps(data))
+        resp.raise_for_status()
+        return resp.json()["files"][self.filename]["content"]
