@@ -20,7 +20,7 @@ import tiktoken
 from .voicevox_character import CV, Mode
 
 # ChatGPT API Key
-API_KEY = os.getenv("CHATGPT_API_KEY")
+API_KEY = os.environ["CHATGPT_API_KEY"]
 # ChatGPT API Endpoint
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 # ChatGPT API header
@@ -36,8 +36,6 @@ TIMEOUT = 300
 CONFIG_FILE = "character.yml"
 # 質問待受で表示されるプロンプト
 PROMPT = "あなた: "
-# OpenAI model
-MODEL = "gpt-3.5-turbo"
 # 会話履歴の形式
 Message = namedtuple("Message", ["role", "content"])
 
@@ -86,7 +84,7 @@ def print_one_by_one(text):
             return
 
 
-async def wait_for_input(timeout: float) -> str:
+async def wait_for_input(timeout: float, mic_input=False) -> str:
     """一定時間内に入力があればその入力を返し、そうでなければランダムな返答を返す関数。
     Parameter: 入力を待つ最大時間（秒単位）
     Return: 入力があった場合はその入力、なかった場合はランダムに選ばれた返答
@@ -98,7 +96,11 @@ async def wait_for_input(timeout: float) -> str:
         "これまでの話題から一つピックアップして",
     ]
     try:
-        input_task = asyncio.create_task(async_input())
+        if mic_input:
+            from .mic_input import async_mic_input
+            input_task = asyncio.create_task(async_mic_input())
+        else:
+            input_task = asyncio.create_task(async_input())
         done, _ = await asyncio.wait({input_task}, timeout=timeout)
         if input_task in done:
             return input_task.result()
@@ -127,25 +129,15 @@ def multi_input() -> str:
     return line + lines
 
 
-def is_over_limit(contents: str) -> bool:
-    """modelのAPI token上限を超えているか"""
-    enc = tiktoken.encoding_for_model(MODEL)
-    limit = 4069
-    tokens = len(enc.encode(contents))
-    return tokens >= limit
-
-
 class AI:
     """AI modified character
     yamlから読み込んだキャラクタ設定
     """
     default_system_role = """
-        さっきの話の内容を聞かれたときに\
-        「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、\
-        あなたの発言と会話のやり取りを要約して話してください。\
-        以下に与えるユーザーの好みを会話の流れで必要に応じて活用してください。\
-
-        # ユーザーの好み\
+        さっきの話の内容を聞かれたときに
+        「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、
+        あなたの発言と会話のやり取りを要約して話してください。
+        以下に与える # Summary Content と User Preference を会話の流れで必要に応じて活用してください。
         """
 
     def __init__(self,
@@ -156,19 +148,21 @@ class AI:
                  filename="chatgpt-assistant.txt",
                  gist=None,
                  chat_summary="",
-                 messages_limit: int = 2,
                  voice: Mode = Mode.NONE,
+                 listen: bool = False,
+                 model: str = "gpt-3.5-turbo",
                  speaker: CV = CV.四国めたんノーマル):
         # YAMLから設定するオプション
-        self.name = name
+        self.name = name  # AIキャラ名
         self.max_tokens = max_tokens
         self.temperature = temperature
         self.system_role = system_role + AI.default_system_role
-        self.filename = filename
+        self.filename = filename  # キャラクタ設定YAML名
         self.gist = gist  # 長期記憶
         self.chat_summary = chat_summary  # 会話履歴
-        self.messages_limit = int(messages_limit)  # 会話履歴のストック上限数
-        self.voice = voice
+        self.voice = voice  # 音声の生成先
+        self.listen = listen  # Trueで入力をマイクから拾う
+        self.model = model  # ChatGPT モデル
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
 
@@ -177,27 +171,50 @@ class AI:
         ユーザーの入力を受け取り、ChatGPT APIにPOSTし、AIの応答を返す
         APIへ渡す前にtoken数を計算して、最初の方の会話から取り除く
         """
-        if self.gist is not None:
-            from .gist_memory import Gist
-            profiling_gist = Gist(Profiler.filename)
-            # else:
-            # ローカルのユーザープロファイルを読み込む
-            # ユーザーが質問するたびにユーザープロファイリングの結果が変わるので、
-            # POSTするたびにユーザープロファイリングの取得処理が必要
-            user_profile = profiling_gist.get()
-        messages = [
-            Message(str(Role.SYSTEM), self.system_role + user_profile),
-            Message(str(Role.ASSISTANT), self.chat_summary),
-        ] + chat_messages
-        contents = '\n'.join([m.content for m in messages])
-        while is_over_limit(contents):
-            messages.pop(2)
-            # index==0: system role
-            # index==1: summary
-            # index==2: 最初の会話履歴
-            # なのでindex==2から削除していく
+        messages = []
+        while True:
+            # messagesにシステムプロンプトと会話要約および会話履歴を結合する
+            messages = [
+                Message(str(Role.SYSTEM),
+                        self.system_role + self.chat_summary),
+                # Message(str(Role.ASSISTANT), self.chat_summary),
+            ] + chat_messages
+            # roleを除いた会話の内容だけを文字列として結合する
+            contents = "\n".join([m.content for m in messages])
+            # contentsのtokens上限未満になるまで続ける
+            if not self.is_over_limit(contents):
+                break
+            # system_role, summary, messagesの中で最も重要度の低い
+            # summaryの１行目を削除する
+            chuncks = self.chat_summary.split("\n")
+            chuncks.pop(1)
+            self.chat_summary = "\n".join(chuncks)
+            # Summaryの一行目は # Summary Contentなのでpop(1)
+            #
+            # ai.chat_summaryの例
+            # ---
+            # # Summary Content
+            # - Planning to go mountain climbing next week.
+            # - Breakfast this morning was good.
+            # - I usually drink coffee, but today I was served tea, which went well with the jam toast.
+            # - Work today is going to be hard and I am worried if I will be able to make it to the drama I am looking forward to.
+            #
+            # # User Preference
+            # - napping
+            # - Likes Python among other programming languages
+            # - Climb mountains
+            # - Drinking coffee
+            # - Watching TV dramas
+
+        # messages debug print
+        # js = json.dumps([m._asdict() for m in messages],
+        #                 indent=4,
+        #                 ensure_ascii=False)
+        # print(js)
+        # dubug
+
         data = {
-            "model": MODEL,
+            "model": self.model,
             "max_tokens": self.max_tokens,
             "temperature": self.temperature,
             "messages": [m._asdict() for m in messages]
@@ -214,7 +231,17 @@ class AI:
                 ai_response = await response.json()
         content = get_content(ai_response)
         messages.append(Message(str(Role.ASSISTANT), content))  # append answer
-        return messages[2:]  # remove system role & summary
+        return messages[1:]  # remove system role & summary
+
+    def is_over_limit(self, contents: str) -> bool:
+        """modelのAPI token上限を超えているか"""
+        tokens = self.token_length(contents)
+        limit = 4096
+        return tokens >= (limit - self.max_tokens)
+
+    def token_length(self, contents: str) -> int:
+        enc = tiktoken.encoding_for_model(self.model)
+        return len(enc.encode(contents))
 
     def set_speaker(self, sp):
         """ AI.speakerの判定
@@ -243,21 +270,6 @@ class AI:
         self.gist.patch(self.chat_summary)
         del summarizer
 
-    async def profiling(self, user_input: str):
-        """ユーザーのプロファイリング分析用の
-        ChatGPT: Profilerを呼び出してユーザープロファイリングを実行し、
-        ユーザープロファイリングをgistへアップロードする。
-        """
-        profiler = Profiler(self.gist)
-        # ユーザープロファイリングを作成
-        profiling_data = await profiler.post(user_input)
-        if self.gist is not None:
-            # ユーザープロファイリングをGistへ保存
-            profiler.gist.patch(profiling_data)
-        # else:
-        # ローカルファイルへユーザープロファイルを保存する処理
-        del profiler
-
     async def ask(self, chat_messages: list[Message] = []):
         """AIへの質問"""
         user_input = ""
@@ -265,7 +277,7 @@ class AI:
             # 待っても入力がなければ、再度質問待ち
             # 入力があればループを抜け回答を考えてもらう
             try:
-                user_input = await wait_for_input(TIMEOUT)
+                user_input = await wait_for_input(TIMEOUT, self.listen)
                 user_input = user_input.replace("/n", " ")
                 if user_input.strip() in ("q", "exit"):
                     raise SystemExit
@@ -273,8 +285,6 @@ class AI:
                 print()
         # ユーザーの入力を会話履歴に追加
         chat_messages.append(Message(str(Role.USER), user_input))
-        # ユーザープロファイリングをバックグラウンドで進める非同期処理
-        asyncio.create_task(self.profiling(user_input))
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
@@ -292,7 +302,7 @@ class AI:
                 print("Error: 音声再生中にエラーが発生しました。", f"{wav_e}無視してテキストを表示します。")
         print_one_by_one(f"{self.name}: {ai_response}\n")
         # 次の質問
-        await self.ask(chat_messages)
+        await self.ask(response_messages)
 
 
 class Summarizer(AI):
@@ -301,11 +311,63 @@ class Summarizer(AI):
     max_tokens = 2000
     temperature = 0
     system_role = """
-    発言者がuserとassistantどちらであるかわかるように、
-    下記の会話をリスト形式で、ですます調を使わずにである調で要約してください。
-    要約は必ず2000tokens以内で収まるようにして、
-    収まらない場合は重要度が低そうな内容を要約から省いて構いません。
-    """
+        Be sure to identify the speaker as either the USER or the ASSISTANT,
+        Please summarize the following conversation in a list format.
+        The summary should be no more than 2000 tokens,
+        If it does not fit, you may omit the content that seems less important from the summary.
+
+        In addition, list the User's preferences based on what was said, as shown in the example output.
+
+        The summary and preferences should be output separately as shown in the example below.
+
+        ### Input example ###
+
+        I'm going hiking next week. I had a nice breakfast this morning. I usually have coffee, but this morning I had tea, and it went well with the jam toast. Well, today's work is going to be tough, so I'm afraid I won't be able to make it in time for the drama I'm looking forward to.
+
+        ### Example output ###
+
+        # Summary Content
+        - Planning to go mountain climbing next week.
+        - Breakfast this morning was good.
+        - I usually drink coffee, but today I was served tea, which went well with the jam toast.
+        - Work today is going to be hard and I am worried if I will be able to make it to the drama I am looking forward to.
+
+        # User Preference
+        - napping
+        - Likes Python among other programming languages
+        - Climb mountains
+        - Drinking coffee
+        - Watching TV dramas
+    """  # 297 tokens
+    __system_role_ja = """
+        発言者がuserとassistantどちらであるかわかるように、
+        下記の会話をリスト形式で、ですます調を使わずにである調で要約してください。
+        要約は必ず2000tokens以内で収まるようにして、
+        収まらない場合は重要度が低そうな内容を要約から省いて構いません。
+
+        さらに、出力例のようにして、発言内容からUserの好みをリストアップしてください。
+
+        要約と好みはそれぞれ下記の例のように分けて出力してください。
+
+        ### 入力例 ###
+
+        来週は山登りに行くんだ。今朝の朝食は美味しかったな。いつもはコーヒーを飲むんだけどね今朝は紅茶が出てきただけど、ジャムトーストと合うんだな。そういや今日の仕事は大変そうなので、楽しみにしているドラマに間に合うか心配だな。
+
+        ### 出力例 ###
+
+        # 要約内容
+        - 来週山登りに行く予定
+        - 今朝の朝食は美味しかった。
+        - 普段はコーヒーを飲んでいるが、今日は紅茶を出してもらい、ジャムトーストと合っていた。
+        - 今日の仕事は大変そうで、楽しみにしているドラマに間に合うか心配している。
+
+        # ユーザーの好み
+        - 昼寝が好き
+        - プログラミング言語の中でも特にPythonが好き
+        - 山登り
+        - コーヒーを飲む
+        - ドラマ鑑賞
+        """  # 528 tokens
 
     def __init__(self, name, filename, gist, chat_summary):
         """
@@ -329,11 +391,12 @@ class Summarizer(AI):
 
     async def post(self, messages: list[Message]) -> str:
         """Summarizer.post
-        会話履歴と会話の内容を送信して会話の要約を作る
+        会話履歴と会話の内容を送信して会話の要約を作る。
+        さらに、ユーザーの好みをリストアップする。
         """
-        messages_str = [
+        chat_history: list[str] = [
             f"- {self.name}: {m.content}"
-            if m.role == Role.ASSISTANT else f"- User: {m.content}"
+            if m.role == str(Role.ASSISTANT) else f"- User: {m.content}"
             for m in messages
         ]
         split_summary: list[str] = self.chat_summary.split("\n")
@@ -341,16 +404,17 @@ class Summarizer(AI):
             # split_summary: summaryの改行区切り
             # system_role: Summarizerの役割
             # content: 会話履歴
-            send_msg = [Summarizer.system_role] + split_summary + messages_str
+            send_msg = [Summarizer.system_role] + split_summary + chat_history
             # これら３つの要素を改行でつなげてトークン計算
             # messagesが最大トークンに収まるまで続ける
-            if not is_over_limit('\n'.join(send_msg)):
+            if not self.is_over_limit('\n'.join(send_msg)):
                 break
             # summaryの上から一行ずつ削除
-            split_summary.pop()
+            split_summary.pop(0)
+        content: str = '\n'.join(split_summary + chat_history)
         data = {
             "model":
-            MODEL,
+            self.model,
             "max_tokens":
             Summarizer.max_tokens,
             "temperature":
@@ -358,95 +422,6 @@ class Summarizer(AI):
             "messages": [{
                 "role": str(Role.SYSTEM),
                 "content": Summarizer.system_role
-            }, {
-                "role": str(Role.USER),
-                "content": '\n'.join(split_summary + messages_str)
-            }]
-        }
-        async with aiohttp.ClientSession() as session:
-            async with session.post(ENDPOINT,
-                                    headers=HEADERS,
-                                    data=json.dumps(data)) as response:
-                if response.status == 429:
-                    raise TooManyRequestsError("Too many requests")
-                elif response.status != 200:
-                    raise ValueError('{}: {}'.format(response.status,
-                                                     response.json()))
-                ai_response = await response.json()
-        content = get_content(ai_response)
-        return content
-
-
-class Profiler(AI):
-    """ユーザーの好みを分析するためのChatGPTインスタンス
-    """
-    # Summarizerでは下記プロパティは固定値として扱う
-    max_tokens = 500
-    temperature = 0
-    filename = "user_personality.txt"
-    system_role = """
-    出力例のようにして、発言内容からUserの好みをリストアップしてください。
-
-    ### 入力例 ###
-    # これまでのユーザーの好み
-    - 昼寝が好き
-    - 山登り
-    - プログラミング言語の中でも特にPythonが好き
-
-    # ユーザーの発言
-    来週は山登りに行くんだ。今朝の朝食は美味しかったな。いつもはコーヒーを飲むんだけどね今朝は紅茶が出てきただけど、ジャムトーストと合うんだな。そういや今日の仕事は大変そうなので、楽しみにしているドラマに間に合うか心配だな。
-
-    ### 出力例 ###
-    - 昼寝が好き
-    - プログラミング言語の中でも特にPythonが好き
-    - 山登り
-    - コーヒーを飲む
-    - ドラマ鑑賞
-    """
-
-    def __init__(self, gist):
-        """
-        * 親クラスから引き継がれるプロパティ
-            * `name`
-            * `filename`
-            * `gist`
-            * `chat_summary`
-        * 子クラスで定義された定数を使用
-            * `max_tokens`
-            * `temperature`
-            * `system_role`
-        """
-        if gist is not None:  # gistがNoneでない == ローカルモードで実行されていない
-            from .gist_memory import Gist
-            gist = Gist(Profiler.filename)
-        super().__init__(max_tokens=Profiler.max_tokens,
-                         temperature=Profiler.temperature,
-                         system_role=Profiler.system_role,
-                         filename=Profiler.filename,
-                         gist=gist)
-
-    async def post(self, user_input: str) -> str:
-        """Profiler.post
-        ユーザーの発言を送信してユーザーの好みを分析する
-        """
-        user_profile = self.gist.get()  # これまでの好み
-        content = f"""
-            # これまでのユーザーの好み
-            {user_profile}
-
-            # ユーザーの発言
-            {user_input}
-            """
-        data = {
-            "model":
-            MODEL,
-            "max_tokens":
-            Profiler.max_tokens,
-            "temperature":
-            Profiler.temperature,
-            "messages": [{
-                "role": str(Role.SYSTEM),
-                "content": Profiler.system_role
             }, {
                 "role": str(Role.USER),
                 "content": content
@@ -458,7 +433,7 @@ class Profiler(AI):
                                     data=json.dumps(data)) as response:
                 if response.status == 429:
                     raise TooManyRequestsError("Too many requests")
-                elif response.status != 200:
+                elif response.status >= 400:
                     raise ValueError('{}: {}'.format(response.status,
                                                      response.json()))
                 ai_response = await response.json()
@@ -466,9 +441,11 @@ class Profiler(AI):
         return content
 
 
-def ai_constructor(name: str = "ChatGPT",
-                   voice: Mode = Mode.NONE,
+def ai_constructor(listen: bool = False,
+                   model: str = "gpt-3.5-turbo",
+                   name: str = "ChatGPT",
                    speaker=None,
+                   voice: Mode = Mode.NONE,
                    character_file: Optional[str] = None) -> AI:
     """YAMLファイルから設定リストを読み込み、characterに指定されたAIキャラクタを返す
 
@@ -500,10 +477,13 @@ def ai_constructor(name: str = "ChatGPT",
     ai = [a for a in ais if a.name == name][-1]
 
     # コマンドライン引数から設定を適用
+    # YAMLの設定を上書きする
     if not character_file:
         # 会話履歴を読み込む
         ai.gist = Gist(ai.filename)
         ai.chat_summary = ai.gist.get()
+    ai.listen = listen
+    ai.model = model
     # AIの音声生成モードを設定
     if isinstance(voice, int):
         voice = Mode(voice)

@@ -20,9 +20,8 @@ def parse_args() -> argparse.Namespace:
     - 引数を解析した結果をargparse.Namespaceオブジェクトに格納し、戻り値として返す。
     """
     cv_list = "\n".join(str(t) for t in CV.items().items())
-    parser = argparse.ArgumentParser(description=f"""ChatGPT client
-
-        speakers: {cv_list}""")
+    parser = argparse.ArgumentParser(
+        description=f"""ChatGPT client speakers: {cv_list}""")
     parser.add_argument(
         "--character",
         "-c",
@@ -30,18 +29,32 @@ def parse_args() -> argparse.Namespace:
         help="AIキャラクタ指定(default=ChatGPT)",
     )
     parser.add_argument(
-        "--voice",
-        "-v",
-        action="count",
-        default=0,
-        help="AI音声の生成先\
-        (-v=SLOW, -vv=FAST, -vvv=LOCAL, default=None = 音声で話さない)",
+        "--listen",
+        "-l",
+        action="store_true",
+        help="""
+Listening mode ユーザーの入力をキーボードからではなくマイクから拾う",
+""",
+    )
+    parser.add_argument(
+        "--model",
+        "-m",
+        default="gpt-3.5-turbo",
+        help="ChatGPTモデル(default=gpt-3.5-turbo)",
     )
     parser.add_argument(
         "--speaker",
         "-s",
         default=None,
         help="VOICEVOX キャラクターボイス(str or int, default None)",
+    )
+    parser.add_argument(
+        "--voice",
+        "-v",
+        action="count",
+        default=0,
+        help="""
+AI音声の生成先 (-v=SLOW, -vv=FAST, -vvv=LOCAL, default=None = 音声で話さない)""",
     )
     parser.add_argument(
         "--yaml",
@@ -54,9 +67,11 @@ def parse_args() -> argparse.Namespace:
 
 if __name__ == "__main__":
     args = parse_args()
-    ai = ai_constructor(name=args.character,
-                        voice=Mode(args.voice),
+    ai = ai_constructor(listen=args.listen,
+                        model=args.model,
+                        name=args.character,
                         speaker=args.speaker,
+                        voice=Mode(args.voice),
                         character_file=args.yaml)
     # Start chat
     print("空行で入力確定, qまたはexitで会話終了")

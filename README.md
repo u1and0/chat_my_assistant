@@ -45,20 +45,42 @@ optional arguments:
 $ git clone https://github.com/u1and0/chat_my_assistant
 $ cd chat_my_assistant
 $ pip install -r requirements.txt
+$ sudo ln -s /home/your_name/path/to/chat_my_assistant/chatme.py /usr/bin/chatme
+```
+
+# Setting
+* ChatGPT API用
+
+```~/.secret
+#!/bin/sh
+export CHATGPT_API_KEY='sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
+        GITHUB_TOKEN='ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
+        GIST_ID='XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
+        VOICEVOX_API_KEY='XXXXXXXXXXXXXXX' \
+        GIST_CLIENT_ID='XXXXXXXXXXXXXXXXXXXX' \
+        GIST_CLIENT_SECRET='XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
 ```
 
 # Requirements
 
-* pydub>=0.25.1
-* PyYAML>=6.0
 * requests>=2.28.1
 * openai API key
+* aiohttp>=3.8.1
+* tiktoken>=0.3.3
 
 # Optional
 
-* Git(Gist) API key
+## 音声を出したいとき
+* pydub>=0.25.1
 * Install VOICEVOX
 * VOICEVOX API key
+
+## 音声を聞かせたいとき
+* speechrecognition>=3.10.0
+
+## 記憶させたいとき
+* PyYAML>=6.0
+* Git(Gist) API key
 
 
 see more [ChatGPTに人格と記憶と声を持たせて話し相手になってもらう](https://qiita.com/1446f763aaf2a8b0c804)
