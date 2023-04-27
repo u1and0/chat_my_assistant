@@ -207,10 +207,10 @@ class AI:
             # - Watching TV dramas
 
         # messages debug print
-        js = json.dumps([m._asdict() for m in messages],
-                        indent=4,
-                        ensure_ascii=False)
-        print(js)
+        # js = json.dumps([m._asdict() for m in messages],
+        #                 indent=4,
+        #                 ensure_ascii=False)
+        # print(js)
         # dubug
 
         data = {
@@ -237,7 +237,7 @@ class AI:
         """modelのAPI token上限を超えているか"""
         tokens = self.token_length(contents)
         limit = 4096
-        return tokens >= limit
+        return tokens >= (limit - self.max_tokens)
 
     def token_length(self, contents: str) -> int:
         enc = tiktoken.encoding_for_model(self.model)
@@ -310,7 +310,6 @@ class Summarizer(AI):
     # Summarizerでは下記プロパティは固定値として扱う
     max_tokens = 2000
     temperature = 0
-    # 297 tokens
     system_role = """
         Be sure to identify the speaker as either the USER or the ASSISTANT,
         Please summarize the following conversation in a list format.
@@ -339,8 +338,7 @@ class Summarizer(AI):
         - Climb mountains
         - Drinking coffee
         - Watching TV dramas
-    """
-    # 528 tokens
+    """  # 297 tokens
     __system_role_ja = """
         発言者がuserとassistantどちらであるかわかるように、
         下記の会話をリスト形式で、ですます調を使わずにである調で要約してください。
@@ -369,7 +367,7 @@ class Summarizer(AI):
         - 山登り
         - コーヒーを飲む
         - ドラマ鑑賞
-        """
+        """  # 528 tokens
 
     def __init__(self, name, filename, gist, chat_summary):
         """
@@ -396,28 +394,24 @@ class Summarizer(AI):
         会話履歴と会話の内容を送信して会話の要約を作る。
         さらに、ユーザーの好みをリストアップする。
         """
-        messages_str = [
+        chat_history: list[str] = [
             f"- {self.name}: {m.content}"
             if m.role == str(Role.ASSISTANT) else f"- User: {m.content}"
             for m in messages
         ]
-        print(messages_str)
         split_summary: list[str] = self.chat_summary.split("\n")
         while True:
             # split_summary: summaryの改行区切り
             # system_role: Summarizerの役割
             # content: 会話履歴
-            send_msg = [Summarizer.system_role] + split_summary + messages_str
+            send_msg = [Summarizer.system_role] + split_summary + chat_history
             # これら３つの要素を改行でつなげてトークン計算
             # messagesが最大トークンに収まるまで続ける
             if not self.is_over_limit('\n'.join(send_msg)):
                 break
             # summaryの上から一行ずつ削除
-            split_summary.pop(1)
-        content: str = '\n'.join(split_summary + messages_str)
-        print(self.system_role)
-        print(content)
-        print(self.token_length('\n'.join(send_msg)), "tokens")
+            split_summary.pop(0)
+        content: str = '\n'.join(split_summary + chat_history)
         data = {
             "model":
             self.model,
