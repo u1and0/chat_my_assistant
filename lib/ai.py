@@ -280,7 +280,6 @@ class AI:
             # 入力があればループを抜け回答を考えてもらう
             try:
                 user_input = await wait_for_input(TIMEOUT, self.listen)
-                user_input = user_input.replace("/n", " ")
                 if user_input.strip() in ("q", "exit"):
                     raise SystemExit
             except KeyboardInterrupt:
