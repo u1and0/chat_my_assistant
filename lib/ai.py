@@ -121,12 +121,14 @@ async def async_input() -> str:
 
 
 def multi_input() -> str:
-    """複数行読み込み
-    空行で入力確定
-    """
-    line = input(PROMPT)
-    lines = "\n".join(iter(input, ""))
-    return line + lines
+    """複数行読み込み,Ctrl+Dで入力確定"""
+    lines: list[str] = []
+    lines.append(input(PROMPT))
+    try:
+        for line in iter(input, None):
+            lines.append(line)
+    except EOFError:
+        return "\n".join(lines)
 
 
 class AI:
@@ -137,7 +139,7 @@ class AI:
         さっきの話の内容を聞かれたときに
         「憶えていない」や「記憶を持たない」と言った発言をしない代わりに、
         あなたの発言と会話のやり取りを要約して話してください。
-        以下に与える # Summary Content と User Preference を会話の流れで必要に応じて活用してください。
+        以下に与える # Summary Content と # User Preference を会話の流れで必要に応じて活用してください。
         """
 
     def __init__(self,

@@ -74,5 +74,5 @@ if __name__ == "__main__":
                         voice=Mode(args.voice),
                         character_file=args.yaml)
     # Start chat
-    print("空行で入力確定, qまたはexitで会話終了")
+    print("Ctrl+Dで入力確定, qまたはexitで会話終了")
     asyncio.run(ai.ask())
