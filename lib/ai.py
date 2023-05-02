@@ -188,9 +188,9 @@ class AI:
                 break
             # system_role, summary, messagesの中で最も重要度の低い
             # summaryの１行目を削除する
-            chuncks = self.chat_summary.split("\n")
-            chuncks.pop(1)
-            self.chat_summary = "\n".join(chuncks)
+            chunks = self.chat_summary.split("\n")
+            chunks.pop(1)
+            self.chat_summary = "\n".join(chunks)
             # Summaryの一行目は # Summary Contentなのでpop(1)
             #
             # ai.chat_summaryの例
