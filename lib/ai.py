@@ -19,8 +19,8 @@ import aiohttp
 import tiktoken
 from .voicevox_character import CV, Mode
 
-# ChatGPT API Key
-API_KEY = os.environ["CHATGPT_API_KEY"]
+# OpenAI API Key
+API_KEY = os.environ["OPENAI_API_KEY"]
 # ChatGPT API Endpoint
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 # ChatGPT API header
@@ -84,10 +84,14 @@ def print_one_by_one(text):
             return
 
 
-async def wait_for_input(timeout: float, mic_input=False) -> str:
+async def wait_for_input(timeout: Optional[float],
+                         mic_input: bool = False) -> str:
     """一定時間内に入力があればその入力を返し、そうでなければランダムな返答を返す関数。
-    Parameter: 入力を待つ最大時間（秒単位）
-    Return: 入力があった場合はその入力、なかった場合はランダムに選ばれた返答
+    Parameter:
+        timeout: 入力を待つ最大時間（秒単位）
+        mic_input: マイク入力モード
+    Return:
+        入力があった場合はその入力、なかった場合はランダムに選ばれた返答
     """
     silent_input = [
         "",
@@ -142,18 +146,21 @@ class AI:
         以下に与える # Summary Content と # User Preference を会話の流れで必要に応じて活用してください。
         """
 
-    def __init__(self,
-                 name="ChatGPT",
-                 max_tokens=1000,
-                 temperature=1.0,
-                 system_role="",
-                 filename="chatgpt-assistant.txt",
-                 gist=None,
-                 chat_summary="",
-                 voice: Mode = Mode.NONE,
-                 listen: bool = False,
-                 model: str = "gpt-3.5-turbo",
-                 speaker: CV = CV.四国めたんノーマル):
+    def __init__(
+        self,
+        name="ChatGPT",
+        max_tokens=1000,
+        temperature=1.0,
+        system_role="",
+        filename="chatgpt-assistant.txt",
+        gist=None,
+        chat_summary="",
+        voice: Mode = Mode.NONE,
+        listen: bool = False,
+        model: str = "gpt-3.5-turbo",
+        speaker: CV = CV.四国めたんノーマル,
+        timeout: Optional[float] = None,
+    ):
         # YAMLから設定するオプション
         self.name = name  # AIキャラ名
         self.max_tokens = max_tokens
@@ -167,6 +174,8 @@ class AI:
         self.model = model  # ChatGPT モデル
         # AIの発話用テキスト読み上げキャラクターを設定
         self.speaker = self.set_speaker(speaker)
+        # コマンドラインから設定するオプション
+        self.timeout = timeout  # 指定秒数をすぎると自動で話し始める
 
     async def post(self, chat_messages: list[Message]) -> list[Message]:
         """AI.post
@@ -279,7 +288,7 @@ class AI:
             # 待っても入力がなければ、再度質問待ち
             # 入力があればループを抜け回答を考えてもらう
             try:
-                user_input = await wait_for_input(TIMEOUT, self.listen)
+                user_input = await wait_for_input(self.timeout, self.listen)
                 if user_input.strip() in ("q", "exit"):
                     raise SystemExit
             except KeyboardInterrupt:
@@ -442,7 +451,8 @@ class Summarizer(AI):
         return content
 
 
-def ai_constructor(listen: bool = False,
+def ai_constructor(auto: bool = False,
+                   listen: bool = False,
                    model: str = "gpt-3.5-turbo",
                    name: str = "ChatGPT",
                    speaker=None,
@@ -489,4 +499,6 @@ def ai_constructor(listen: bool = False,
     if isinstance(voice, int):
         voice = Mode(voice)
     ai.voice = voice
+    # auto==Trueで入力がないときに自動で話し始める
+    ai.timeout = TIMEOUT if auto else None
     return ai

@@ -23,6 +23,12 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=f"""ChatGPT client speakers: {cv_list}""")
     parser.add_argument(
+        "--auto",
+        "-a",
+        action="store_true",
+        help="指定されたとき、5分間入力がないたまに自動で話し出す。",
+    )
+    parser.add_argument(
         "--character",
         "-c",
         default="ChatGPT",
@@ -67,12 +73,15 @@ AI音声の生成先 (-v=SLOW, -vv=FAST, -vvv=LOCAL, default=None = 音声で話
 
 if __name__ == "__main__":
     args = parse_args()
-    ai = ai_constructor(listen=args.listen,
-                        model=args.model,
-                        name=args.character,
-                        speaker=args.speaker,
-                        voice=Mode(args.voice),
-                        character_file=args.yaml)
+    ai = ai_constructor(
+        auto=args.auto,
+        listen=args.listen,
+        model=args.model,
+        name=args.character,
+        speaker=args.speaker,
+        voice=Mode(args.voice),
+        character_file=args.yaml,
+    )
     # Start chat
     print("Ctrl+Dで入力確定, qまたはexitで会話終了")
     asyncio.run(ai.ask())
