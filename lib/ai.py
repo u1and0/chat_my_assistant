@@ -276,7 +276,14 @@ class AI:
         summarizer = Summarizer(self.name, self.filename, self.gist,
                                 self.chat_summary)
         # 要約文を作成
-        self.chat_summary = await summarizer.post(chat_messages)
+        while True:
+            try:
+                self.chat_summary = await summarizer.post(chat_messages)
+                break
+            except TooManyRequestsError:
+                print("Retry... please wait 20 sec")
+                await asyncio.sleep(20)
+                continue
         # 要約文をGistへ保存
         self.gist.patch(self.chat_summary)
         del summarizer
@@ -298,7 +305,15 @@ class AI:
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
-        response_messages = await self.post(chat_messages)
+        while True:
+            try:
+                response_messages = await self.post(chat_messages)
+                break
+            except TooManyRequestsError:
+                print("Retry... please wait 20 sec")
+                await asyncio.sleep(20)
+                continue
+
         ai_response = response_messages[-1].content
         spinner_task.cancel()
         # 会話の要約をバックグラウンドで進める非同期処理
