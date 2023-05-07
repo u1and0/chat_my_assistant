@@ -49,16 +49,31 @@ $ sudo ln -s /home/your_name/path/to/chat_my_assistant/chatme.py /usr/bin/chatme
 ```
 
 # Setting
-* ChatGPT API用
+## Recommend
+ChatGPT API用を環境変数に設定します。設定しない場合は、プロンプトで聞いてきますので、入力してください。
+
+## Optional
+* [GitHubトークンとGistのIDを設定](https://docs.github.com/ja/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token)します。GistのIDはGistのURLのユーザー名の後に続く文字列です。例えGistのURLがhttps://gist.github.com/u1and0/b47b454ac12a335bacd62ac5b0e8c6da3だったら、b47b454ac12a335bacd62ac5b0e8c6da3がGistIDです。これらは会話サマリーの記憶の呼び出し、保存に使われます。
+* [VOICEVOXのAPIキーを設定](https://su-shiki.com/api/)します。これは`-vv`オプションをつけたときに音声合成に使われます。
+* [GistクライアントIDとトークン](https://rcmdnk.com/blog/2017/04/22/blog-octopress-github/)を設定します。これはGistのリクエスト制限(60分あたり60回)を緩和します。
+
+
 
 ```~/.secret
 #!/bin/sh
-export CHATGPT_API_KEY='sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
+export OPENAI_API_KEY='sk-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
         GITHUB_TOKEN='ghp_XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
         GIST_ID='XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX' \
         VOICEVOX_API_KEY='XXXXXXXXXXXXXXX' \
         GIST_CLIENT_ID='XXXXXXXXXXXXXXXXXXXX' \
         GIST_CLIENT_SECRET='XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX'
+```
+
+## Vim plugin
+<kbd>leader C</kbd> で選択範囲の内容を質問します。
+
+```
+:source /path/to/chat_my_assistant/plugin/chat_function.vim
 ```
 
 # Requirements
