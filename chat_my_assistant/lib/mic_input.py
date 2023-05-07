@@ -51,18 +51,3 @@ async def async_mic_input(language="ja-JP") -> str:
             # yield data
         print(text)
         return text
-
-    # recognize speech using Google Speech Recognition
-    # try:
-    #     text = recognizer.recognize_google(audio, language=language)
-    #     return text
-    # except sr.UnknownValueError:
-    #     print("Google Speech Recognition could not understand audio")
-    # except sr.RequestError as e:
-    #     print(
-    #         f"Could not request results from Google Speech Recognition service;{e}"
-    #     )
-
-
-if __name__ == "__main__":
-    print(microphone_input())

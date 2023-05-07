@@ -6,8 +6,9 @@
 import os
 import sys
 import json
-from enum import Enum, auto
-from collections import namedtuple
+from getpass import getpass
+from enum import Enum
+from dataclasses import dataclass
 from typing import Optional
 import random
 from time import sleep
@@ -20,7 +21,10 @@ import tiktoken
 from .voicevox_character import CV, Mode
 
 # OpenAI API Key
-API_KEY = os.environ["OPENAI_API_KEY"]
+try:
+    API_KEY = os.environ["OPENAI_API_KEY"]
+except KeyError:
+    API_KEY = getpass("OpenAI API key: ")
 # ChatGPT API Endpoint
 ENDPOINT = "https://api.openai.com/v1/chat/completions"
 # ChatGPT API header
@@ -36,20 +40,28 @@ TIMEOUT = 300
 CONFIG_FILE = "character.yml"
 # 質問待受で表示されるプロンプト
 PROMPT = "あなた: "
-# 会話履歴の形式
-Message = namedtuple("Message", ["role", "content"])
 
 
 class Role(Enum):
     """messagesオブジェクトのroleキー
     Usage: Role.ASSISTANT == "assistant"
     """
-    SYSTEM = auto()
-    ASSISTANT = auto()
-    USER = auto()
+    SYSTEM = "system"
+    USER = "user"
+    ASSISTANT = "assistant"
 
     def __str__(self):
         return self.name.lower()
+
+
+@dataclass
+class Message:
+    """会話履歴の形式"""
+    role: Role
+    content: str
+
+    def _asdict(self):
+        return {"role": str(self.role), "content": self.content}
 
 
 class TooManyRequestsError(Exception):
@@ -186,9 +198,7 @@ class AI:
         while True:
             # messagesにシステムプロンプトと会話要約および会話履歴を結合する
             messages = [
-                Message(str(Role.SYSTEM),
-                        self.system_role + self.chat_summary),
-                # Message(str(Role.ASSISTANT), self.chat_summary),
+                Message(Role.SYSTEM, self.system_role + self.chat_summary),
             ] + chat_messages
             # roleを除いた会話の内容だけを文字列として結合する
             contents = "\n".join([m.content for m in messages])
@@ -241,7 +251,7 @@ class AI:
                                                      response.json()))
                 ai_response = await response.json()
         content = get_content(ai_response)
-        messages.append(Message(str(Role.ASSISTANT), content))  # append answer
+        messages.append(Message(Role.ASSISTANT, content))  # append answer
         return messages[1:]  # remove system role & summary
 
     def is_over_limit(self, contents: str) -> bool:
@@ -301,7 +311,7 @@ class AI:
             except KeyboardInterrupt:
                 print()
         # ユーザーの入力を会話履歴に追加
-        chat_messages.append(Message(str(Role.USER), user_input))
+        chat_messages.append(Message(Role.USER, user_input))
         # 回答を考えてもらう
         spinner_task = asyncio.create_task(spinner())  # スピナー表示
         # ai_responseが出てくるまで待つ
@@ -421,7 +431,7 @@ class Summarizer(AI):
         """
         chat_history: list[str] = [
             f"- {self.name}: {m.content}"
-            if m.role == str(Role.ASSISTANT) else f"- User: {m.content}"
+            if m.role == Role.ASSISTANT else f"- User: {m.content}"
             for m in messages
         ]
         split_summary: list[str] = self.chat_summary.split("\n")
@@ -437,20 +447,15 @@ class Summarizer(AI):
             # summaryの上から一行ずつ削除
             split_summary.pop(0)
         content: str = '\n'.join(split_summary + chat_history)
+        messages: list[Message] = [
+            Message(Role.SYSTEM, Summarizer.system_role),
+            Message(Role.USER, content)
+        ]
         data = {
-            "model":
-            self.model,
-            "max_tokens":
-            Summarizer.max_tokens,
-            "temperature":
-            Summarizer.temperature,
-            "messages": [{
-                "role": str(Role.SYSTEM),
-                "content": Summarizer.system_role
-            }, {
-                "role": str(Role.USER),
-                "content": content
-            }]
+            "model": self.model,
+            "max_tokens": Summarizer.max_tokens,
+            "temperature": Summarizer.temperature,
+            "messages": [m._asdict() for m in messages]
         }
         async with aiohttp.ClientSession() as session:
             async with session.post(ENDPOINT,
