@@ -139,6 +139,4 @@ if __name__ == "__main__":
     # except requests.HTTPError:
     #     resp = get_voice(text, mode=Mode.FAST)
     print(Mode(args.voicemode))
-    play_voice(args.text,
-               speaker=args.speaker,
-               mode=Mode(args.voicemode))
+    play_voice(args.text, speaker=args.speaker, mode=Mode(args.voicemode))

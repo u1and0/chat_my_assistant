@@ -1,5 +1,20 @@
 #!/usr/bin/env python3
-"""chatgptに複数回の質問と回答 CLI"""
+"""キャラクターを設定したChatGPTと回答をします。
+キャラクター設定をGistから取得し、会話の履歴をGistへ保存します。
+
+usage:
+    テキスト入力、テキスト出力
+    $ chatme -c <システムプロンプトキャラクタ名>
+
+    テキスト入力、音声出力
+    $ chatme -vv -c <システムプロンプトキャラクタ名>
+
+    音声入力、音声出力
+    $ chatme -vv -l -c <システムプロンプトキャラクタ名> 2> /dev/null
+
+    -c の指定がない場合はChatGPTのデフォルトを使用します。
+    `2> /dev/null` がないとALSA lib errorメッセージが表示されます。
+"""
 import argparse
 import asyncio
 from lib import ai_constructor, CV, Mode
@@ -20,13 +35,12 @@ def parse_args() -> argparse.Namespace:
     - 引数を解析した結果をargparse.Namespaceオブジェクトに格納し、戻り値として返す。
     """
     cv_list = "\n".join(str(t) for t in CV.items().items())
-    parser = argparse.ArgumentParser(
-        description=f"""ChatGPT client speakers: {cv_list}""")
+    parser = argparse.ArgumentParser(description=f"""{__doc__}\n{cv_list}""")
     parser.add_argument(
         "--auto",
         "-a",
         action="store_true",
-        help="指定されたとき、5分間入力がないたまに自動で話し出す。",
+        help="5分間入力がないときに、たまに自動で話し出す。",
     )
     parser.add_argument(
         "--character",
@@ -83,5 +97,8 @@ if __name__ == "__main__":
         character_file=args.yaml,
     )
     # Start chat
-    print("Ctrl+Dで入力確定, qまたはexitで会話終了")
+    if args.listen:
+        print("Ctrl+Cで会話終了")
+    else:
+        print("Ctrl+Dで入力確定, qまたはexitで会話終了")
     asyncio.run(ai.ask())

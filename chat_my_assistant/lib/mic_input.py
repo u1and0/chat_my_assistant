@@ -30,10 +30,11 @@ async def async_mic_input(language="ja-JP") -> str:
     with sr.Microphone() as source:
         recognizer.adjust_for_ambient_noise(source)
         # listen for audio and convert it to text
-        audio = recognizer.listen(source)
         loop = asyncio.get_running_loop()
         while True:
             try:
+                print("あなた: ", end="")
+                audio = recognizer.listen(source)
                 text = await loop.run_in_executor(None,
                                                   recognizer.recognize_google,
                                                   audio, None, language)
