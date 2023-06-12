@@ -33,7 +33,6 @@ async def async_mic_input(language="ja-JP") -> str:
         loop = asyncio.get_running_loop()
         while True:
             try:
-                print("あなた: ", end="")
                 audio = recognizer.listen(source)
                 text = await loop.run_in_executor(None,
                                                   recognizer.recognize_google,

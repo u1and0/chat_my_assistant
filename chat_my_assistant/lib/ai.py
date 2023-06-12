@@ -65,6 +65,7 @@ class Message:
 
 
 class TooManyRequestsError(Exception):
+
     def __init__(self, message):
         self.message = message
 
@@ -114,11 +115,16 @@ async def wait_for_input(timeout: Optional[float],
     try:
         if mic_input:
             from .mic_input import async_mic_input
+            from beepy import beep
+            beep(1)  # Sound ready for listen
+            print(PROMPT, end="")
             input_task = asyncio.create_task(async_mic_input())
         else:
             input_task = asyncio.create_task(async_input())
         done, _ = await asyncio.wait({input_task}, timeout=timeout)
         if input_task in done:
+            if mic_input:
+                beep(5)  # Sound for queued user question
             return input_task.result()
         raise asyncio.TimeoutError("Timeout")
     except asyncio.CancelledError:
