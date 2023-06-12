@@ -39,11 +39,13 @@ async def async_mic_input(language="ja-JP") -> str:
                                                   audio, None, language)
             except sr.UnknownValueError:
                 print("Google Speech Recognition could not understand audio")
+                await asyncio.sleep(1)
                 continue
             except sr.RequestError as e:
                 print(
                     f"Could not request results from Google Speech Recognition service;{e}"
                 )
+                await asyncio.sleep(1)
                 continue
             if text.strip():
                 break
